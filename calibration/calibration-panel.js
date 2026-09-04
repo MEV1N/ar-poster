@@ -105,6 +105,11 @@ export class CalibrationPanel {
         <!-- Action Buttons -->
         <div class="calib-section">
           <div class="calib-btn-grid">
+            <button class="calib-btn" id="btnOptimizeTracking" style="grid-column: span 2; background: linear-gradient(135deg, #00ffaa, #00f0ff); color: #02120d; font-weight: 700; border: none; box-shadow: 0 4px 12px rgba(0, 255, 170, 0.35);">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/></svg>
+              Optimize for Universal Tracking
+            </button>
+
             <button class="calib-btn calib-btn-primary" id="btnSaveCalib">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/></svg>
               Save Calibration
@@ -204,6 +209,23 @@ export class CalibrationPanel {
     closeBtn.addEventListener('click', () => {
       this.hide();
       if (this.onClose) this.onClose();
+    });
+
+    // Optimize for Universal Tracking
+    this.container.querySelector('#btnOptimizeTracking').addEventListener('click', () => {
+      this.manager.update({
+        smoothing: 0.84,
+        confidenceThreshold: 0.45,
+        lostTargetTimeout: 1400,
+        position: { x: 0, y: 0, z: 0 },
+        scale: 1.0,
+        scaleX: 1.0,
+        scaleY: 1.0,
+        rotation: { x: 0, y: 0, z: 0 }
+      });
+      this.manager.save();
+      this.syncFromState();
+      this.showToast('Universal Tracking Optimization Applied & Saved!');
     });
 
     // Save

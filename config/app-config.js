@@ -38,5 +38,39 @@ export const APP_CONFIG = {
 };
 
 export function getSavedCalibration() {
+  try {
+    const raw = localStorage.getItem('ar_poster_calibration_v1');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return {
+        ...APP_CONFIG.defaultCalibration,
+        ...parsed,
+        position: { ...APP_CONFIG.defaultCalibration.position, ...(parsed.position || {}) },
+        rotation: { ...APP_CONFIG.defaultCalibration.rotation, ...(parsed.rotation || {}) }
+      };
+    }
+  } catch (err) {
+    console.warn('Failed to load calibration:', err);
+  }
   return JSON.parse(JSON.stringify(APP_CONFIG.defaultCalibration));
+}
+
+export function saveCalibration(calibrationData) {
+  try {
+    localStorage.setItem('ar_poster_calibration_v1', JSON.stringify(calibrationData));
+    return true;
+  } catch (err) {
+    console.error('Failed to save calibration:', err);
+    return false;
+  }
+}
+
+export function resetSavedCalibration() {
+  try {
+    localStorage.removeItem('ar_poster_calibration_v1');
+    return true;
+  } catch (err) {
+    console.error('Failed to reset calibration:', err);
+    return false;
+  }
 }

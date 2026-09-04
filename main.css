@@ -8,8 +8,14 @@
 }
 
 html, body {
+  position: fixed;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
+  height: 100dvh;
+  margin: 0;
+  padding: 0;
   overflow: hidden;
   background-color: #000;
   color: #fff;
@@ -18,24 +24,24 @@ html, body {
   -webkit-user-select: none;
 }
 
+/* Fullscreen Camera Viewport */
 #arContainer {
-  position: fixed;
-  inset: 0;
-  width: 100vw;
-  height: 100vh;
-  z-index: 1;
-  overflow: hidden;
-  background: #000;
-}
-
-#arContainer video {
   position: absolute;
   top: 0;
   left: 0;
-  width: 100% !important;
-  height: 100% !important;
-  object-fit: cover !important;
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  background: #000;
   z-index: 1;
+}
+
+/* Allow MindAR to dynamically compute exact aspect-fill dimensions without clamping */
+#arContainer video {
+  max-width: none !important;
+  max-height: none !important;
+  display: block;
 }
 
 #arContainer canvas {
@@ -55,20 +61,21 @@ html, body {
   left: 0;
   width: 100%;
   height: 100%;
+  height: 100dvh;
   z-index: 10;
   pointer-events: none;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
   align-items: center;
-  padding: 0 20px 48px 20px;
+  padding: 0 20px calc(env(safe-area-inset-bottom, 24px) + 32px) 20px;
 }
 
 .prompt-badge {
-  background: rgba(10, 14, 24, 0.75);
+  background: rgba(10, 14, 24, 0.78);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 999px;
   padding: 14px 28px;
   color: #ffffff;
@@ -88,11 +95,46 @@ html, body {
   pointer-events: none;
 }
 
-/* Initial tap-to-start overlay if camera requires permission interaction */
+/* Subtle Admin Gear Button */
+.admin-gear-btn {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 16px) + 12px);
+  right: 16px;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: rgba(12, 16, 26, 0.55);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: rgba(255, 255, 255, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 50;
+  transition: all 0.25s ease;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.admin-gear-btn:hover, .admin-gear-btn:active {
+  background: rgba(0, 240, 255, 0.2);
+  color: #00f0ff;
+  border-color: #00f0ff;
+  transform: rotate(30deg);
+}
+
+.admin-gear-btn svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+
+/* Tap to start camera overlay for mobile gesture requirement */
 .start-overlay {
   position: fixed;
   inset: 0;
-  z-index: 20;
+  z-index: 30;
   background: rgba(0, 0, 0, 0.85);
   display: flex;
   align-items: center;

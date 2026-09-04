@@ -52,14 +52,14 @@ export class ARManager {
       throw new Error('MindAR Three.js library could not be loaded.');
     }
 
-    // Initialize MindAR Three instance
+    // Initialize MindAR Three instance with universal tracking optimizations
     this.mindarThree = new MindARThreeClass({
       container: this.container,
       imageTargetSrc: this.imageTargetSrc,
-      filterMinCF: 0.0001,
-      filterBeta: 0.001,
-      warmupTolerance: 5,
-      missTolerance: 5,
+      filterMinCF: this.calibration.filterMinCF || 0.0001,
+      filterBeta: this.calibration.filterBeta || 0.001,
+      warmupTolerance: this.calibration.warmupTolerance || 3,
+      missTolerance: this.calibration.missTolerance || 8,
       uiLoading: 'no',
       uiScanning: 'no'
     });
@@ -121,6 +121,28 @@ export class ARManager {
     if (this.isRunning) return;
     await this.mindarThree.start();
     this.isRunning = true;
+
+    // Ensure full-screen aspect fill calculation on mobile devices
+    const handleResize = () => {
+      if (this.mindarThree) {
+        this.mindarThree.resize();
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', () => {
+      setTimeout(handleResize, 150);
+      setTimeout(handleResize, 500);
+    });
+
+    const video = this.mindarThree.video;
+    if (video) {
+      video.addEventListener('loadedmetadata', handleResize);
+      video.addEventListener('playing', handleResize);
+      setTimeout(handleResize, 200);
+      setTimeout(handleResize, 600);
+      setTimeout(handleResize, 1200);
+    }
 
     // Start render loop
     this.renderer.setAnimationLoop(() => {
