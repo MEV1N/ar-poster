@@ -15,14 +15,19 @@ export default defineConfig({
       configureServer(server) {
         server.middlewares.use('/__save_mind', (req, res) => {
           if (req.method === 'POST') {
+            const urlObj = new URL(req.url, 'http://localhost');
+            const targetName = urlObj.searchParams.get('name') || 'poster.mind';
             const chunks = [];
             req.on('data', chunk => chunks.push(chunk));
             req.on('end', () => {
               const buf = Buffer.concat(chunks);
               fs.mkdirSync('targets', { recursive: true });
-              fs.writeFileSync('targets/event-poster.mind', buf);
+              fs.mkdirSync('public/targets', { recursive: true });
+              fs.writeFileSync(`targets/${targetName}`, buf);
+              fs.writeFileSync(`public/targets/${targetName}`, buf);
+              console.log(`Saved target to targets/${targetName} and public/targets/${targetName} (${buf.length} bytes)`);
               res.writeHead(200, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ success: true, bytes: buf.length }));
+              res.end(JSON.stringify({ success: true, bytes: buf.length, target: targetName }));
             });
           } else {
             res.writeHead(405);

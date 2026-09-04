@@ -1,33 +1,32 @@
 /**
  * Application Configuration & Target Settings
- * Allows administrator to easily configure targets, video source, and default AR parameters.
  */
 import defaultCalibration from './default-calibration.json';
 
 export const APP_CONFIG = {
   // Target poster configuration
   target: {
-    name: 'CYBERPUNK 2088 EXPO Poster Target',
-    imageSrc: './assets/event-poster.jpg',
-    mindSrc: './targets/event-poster.mind',
-    // Physical aspect ratio of the poster (width / height)
-    aspectRatio: 896 / 1200, // 0.74667
-    originalWidth: 896,
-    originalHeight: 1200
+    name: 'Event Poster Target',
+    imageSrc: './poster.png',
+    mindSrc: './targets/poster.mind',
+    // Physical aspect ratio of poster.png (941 / 1672)
+    aspectRatio: 941 / 1672,
+    originalWidth: 941,
+    originalHeight: 1672
   },
 
   // Primary AR Video asset configuration
   video: {
-    src: './videos/event-promo.mp4',
+    src: './video.mp4',
     loop: true,
     preload: 'auto',
     playsInline: true
   },
 
-  // Audio configuration (browser autoplay policy compliant)
+  // Audio configuration
   audio: {
-    initialMuted: true,
-    volume: 0.85
+    initialMuted: false,
+    volume: 1.0
   },
 
   // Camera settings
@@ -35,56 +34,9 @@ export const APP_CONFIG = {
     facingMode: 'environment'
   },
 
-  // Persistence keys
-  storageKey: 'ar_poster_calibration_v1',
-
-  // Default calibration settings
   defaultCalibration
 };
 
-/**
- * Loads calibrated settings from browser localStorage or returns defaults
- */
 export function getSavedCalibration() {
-  try {
-    const raw = localStorage.getItem(APP_CONFIG.storageKey);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      return {
-        ...APP_CONFIG.defaultCalibration,
-        ...parsed,
-        position: { ...APP_CONFIG.defaultCalibration.position, ...(parsed.position || {}) },
-        rotation: { ...APP_CONFIG.defaultCalibration.rotation, ...(parsed.rotation || {}) }
-      };
-    }
-  } catch (err) {
-    console.warn('Failed to load saved calibration, falling back to defaults:', err);
-  }
   return JSON.parse(JSON.stringify(APP_CONFIG.defaultCalibration));
-}
-
-/**
- * Persists calibrated settings to browser localStorage
- */
-export function saveCalibration(calibrationData) {
-  try {
-    localStorage.setItem(APP_CONFIG.storageKey, JSON.stringify(calibrationData));
-    return true;
-  } catch (err) {
-    console.error('Failed to save calibration:', err);
-    return false;
-  }
-}
-
-/**
- * Clears calibration from localStorage
- */
-export function resetSavedCalibration() {
-  try {
-    localStorage.removeItem(APP_CONFIG.storageKey);
-    return true;
-  } catch (err) {
-    console.error('Failed to reset calibration:', err);
-    return false;
-  }
 }

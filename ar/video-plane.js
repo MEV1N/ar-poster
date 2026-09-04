@@ -32,19 +32,33 @@ export class VideoPlane {
 
   initVideo() {
     this.video = document.createElement('video');
-    this.video.src = this.src;
     this.video.crossOrigin = 'anonymous';
     this.video.playsInline = true;
     this.video.setAttribute('webkit-playsinline', 'true');
     this.video.setAttribute('playsinline', 'true');
     this.video.loop = true;
-    this.video.muted = true; // Browser autoplay requirement
+    this.video.muted = true;
     this.video.preload = 'auto';
 
-    // Check if video can play; if error or blocked, use dynamic cyberpunk visualizer
-    this.video.addEventListener('error', (e) => {
-      console.warn('Video failed to load, switching to dynamic cyberpunk AR visualizer canvas:', e);
-      this.enableDynamicCanvas();
+    const fallbackSources = [
+      this.src,
+      './video.mp4',
+      './videos/useless video.mp4',
+      './videos/video.mp4',
+      './videos/event-promo.mp4'
+    ];
+    let sourceIndex = 0;
+
+    this.video.src = fallbackSources[sourceIndex];
+
+    this.video.addEventListener('error', () => {
+      sourceIndex++;
+      if (sourceIndex < fallbackSources.length) {
+        this.video.src = fallbackSources[sourceIndex];
+        this.video.load();
+      } else {
+        this.enableDynamicCanvas();
+      }
     });
 
     this.texture = new THREE.VideoTexture(this.video);

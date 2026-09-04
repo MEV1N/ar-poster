@@ -529,11 +529,11 @@
     });
 
     loadDefaultBtn.addEventListener('click', async () => {
-      log('Loading default poster: /assets/event-poster.jpg');
+      log('Loading default poster: /poster.png');
       try {
-        const res = await fetch('./assets/event-poster.jpg');
+        const res = await fetch('./poster.png');
         const blob = await res.blob();
-        handleFile(new File([blob], 'event-poster.jpg', { type: 'image/jpeg' }));
+        handleFile(new File([blob], 'poster.png', { type: 'image/png' }));
       } catch (err) {
         log(`Failed to load default poster: ${err.message}`);
       }
@@ -657,14 +657,14 @@
         progressStatus.textContent = 'Compilation complete!';
         log(`Success! Target compiled with ${totalPoints} features (${(byteSize / 1024).toFixed(1)} KB).`, true);
 
-        // Auto-save to /targets/event-poster.mind via Vite middleware
+        // Auto-save to /targets/poster.mind via Vite middleware
         try {
-          const saveRes = await fetch('/__save_mind', {
+          const saveRes = await fetch('/__save_mind?name=poster.mind', {
             method: 'POST',
             body: compiledBuffer
           });
           if (saveRes.ok) {
-            log('✓ Automatically saved target to /targets/event-poster.mind!', true);
+            log('✓ Automatically saved target to /targets/poster.mind & public/targets/poster.mind!', true);
           }
         } catch (saveErr) {
           console.warn('Auto-save endpoint notice:', saveErr);
@@ -685,7 +685,7 @@
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'event-poster.mind';
+      a.download = 'poster.mind';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
