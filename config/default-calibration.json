@@ -1,0 +1,22 @@
+{
+  "position": {
+    "x": 0.0,
+    "y": 0.0,
+    "z": 0.0
+  },
+  "scale": 1.0,
+  "scaleX": 1.0,
+  "scaleY": 1.0,
+  "rotation": {
+    "x": 0,
+    "y": 0,
+    "z": 0
+  },
+  "opacity": 1.0,
+  "videoStartOffset": 0.0,
+  "smoothing": 0.8,
+  "confidenceThreshold": 0.6,
+  "lostTargetTimeout": 1000,
+  "showVisualBounds": true,
+  "autoPlayAudio": false
+}

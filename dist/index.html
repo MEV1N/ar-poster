@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>CYBERPUNK 2088 EXPO — WebAR Poster Experience</title>
+  <meta name="description" content="Production-ready WebAR image-tracking experience for the CYBERPUNK 2088 EXPO event poster. Track the physical poster and watch AR video and holograms come alive.">
+  <meta name="theme-color" content="#05070c">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="CYBERPUNK 2088 EXPO — WebAR Experience">
+  <meta property="og:description" content="Point your phone camera at the event poster to unlock interactive AR animations and video.">
+  <meta property="og:image" content="./assets/event-poster.jpg">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='%2300f0ff' d='M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5'/></svg>">
+
+  <!-- ES Module Import Map for Three.js and MindAR -->
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+      "mindar-image-three": "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js"
+    }
+  }
+  </script>
+  <script type="module" crossorigin src="/assets/main-CScI7Cyv.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/modulepreload-polyfill-B5Qt9EMX.js">
+  <link rel="stylesheet" crossorigin href="/assets/main-Coecw_Wy.css">
+</head>
+<body>
+
+  <!-- Fullscreen WebAR Camera & 3D Canvas Viewport -->
+  <div id="arContainer"></div>
+
+  <!-- Application Bootstrap -->
+</body>
+</html>
