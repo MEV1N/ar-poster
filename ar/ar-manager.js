@@ -9,8 +9,9 @@ export class ARManager {
   constructor({
     container,
     imageTargetSrc,
+    targets = [],
     targetWidth = 1.0,
-    targetHeight = 1.34,
+    targetHeight = 1.776,
     videoSrc,
     calibration,
     onTrackingStateChange,
@@ -18,9 +19,14 @@ export class ARManager {
   }) {
     this.container = container;
     this.imageTargetSrc = imageTargetSrc;
-    this.targetWidth = targetWidth;
-    this.targetHeight = targetHeight;
-    this.videoSrc = videoSrc;
+    this.targets = Array.isArray(targets) && targets.length > 0
+      ? targets
+      : [{
+          id: 'default-target',
+          name: 'Default Target',
+          videoSrc: videoSrc || './video.mp4',
+          aspectRatio: targetWidth / targetHeight
+        }];
     this.calibration = calibration;
     this.onTrackingStateChange = onTrackingStateChange;
     this.onFirstTrack = onFirstTrack;
@@ -29,6 +35,12 @@ export class ARManager {
     this.scene = null;
     this.camera = null;
     this.renderer = null;
+
+    // Multi-target items array: { index, def, anchor, contentAnchor }
+    this.targetItems = [];
+    this.activeTrackingIndices = new Set();
+
+    // Compatibility references
     this.anchor = null;
     this.contentAnchor = null;
 
@@ -81,40 +93,71 @@ export class ARManager {
     dirLight.position.set(0, 1, 2);
     this.scene.add(dirLight);
 
-    // Create Image Target Anchor (target 0 = event poster)
-    this.anchor = this.mindarThree.addAnchor(0);
+    // Create an anchor and content anchor for each configured target
+    this.targetItems = [];
+    this.activeTrackingIndices.clear();
 
-    // Create Content Anchor with AR video and holographic overlays
-    this.contentAnchor = new ContentAnchor({
-      targetWidth: this.targetWidth,
-      targetHeight: this.targetHeight,
-      videoSrc: this.videoSrc,
-      calibration: this.calibration
-    });
+    for (let i = 0; i < this.targets.length; i++) {
+      const targetDef = this.targets[i];
+      const anchor = this.mindarThree.addAnchor(i);
+      const aspect = targetDef.aspectRatio || (targetDef.originalWidth && targetDef.originalHeight ? targetDef.originalWidth / targetDef.originalHeight : 941 / 1672);
+      const height = 1.0 / aspect;
 
-    this.anchor.group.add(this.contentAnchor.rootGroup);
-
-    // Hook tracking callbacks
-    this.anchor.onTargetFound = () => {
-      this.contentAnchor.onTargetFound();
-      if (this.onTrackingStateChange) {
-        this.onTrackingStateChange('tracking');
-      }
-      if (!this.hasTrackedOnce) {
-        this.hasTrackedOnce = true;
-        if (this.onFirstTrack) {
-          this.onFirstTrack();
-        }
-      }
-    };
-
-    this.anchor.onTargetLost = () => {
-      this.contentAnchor.onTargetLost(() => {
-        if (this.onTrackingStateChange) {
-          this.onTrackingStateChange('lost');
-        }
+      const contentAnchor = new ContentAnchor({
+        targetWidth: 1.0,
+        targetHeight: height,
+        videoSrc: targetDef.videoSrc || targetDef.video,
+        fallbacks: targetDef.fallbackVideos || [],
+        calibration: this.calibration
       });
-    };
+
+      anchor.group.add(contentAnchor.rootGroup);
+
+      // Tracking state callbacks for target i
+      anchor.onTargetFound = () => {
+        // Pause other active videos so sound/video does not overlap
+        this.targetItems.forEach((item, idx) => {
+          if (idx !== i) {
+            item.contentAnchor.videoPlane.pause();
+          }
+        });
+
+        contentAnchor.onTargetFound();
+        this.activeTrackingIndices.add(i);
+
+        if (this.onTrackingStateChange) {
+          this.onTrackingStateChange('tracking', targetDef);
+        }
+        if (!this.hasTrackedOnce) {
+          this.hasTrackedOnce = true;
+          if (this.onFirstTrack) {
+            this.onFirstTrack(targetDef);
+          }
+        }
+      };
+
+      anchor.onTargetLost = () => {
+        contentAnchor.onTargetLost(() => {
+          this.activeTrackingIndices.delete(i);
+          if (this.activeTrackingIndices.size === 0 && this.onTrackingStateChange) {
+            this.onTrackingStateChange('lost');
+          }
+        });
+      };
+
+      this.targetItems.push({
+        index: i,
+        def: targetDef,
+        anchor,
+        contentAnchor
+      });
+    }
+
+    // Default reference for backward compatibility
+    if (this.targetItems[0]) {
+      this.anchor = this.targetItems[0].anchor;
+      this.contentAnchor = this.targetItems[0].contentAnchor;
+    }
   }
 
   async start() {
@@ -149,8 +192,8 @@ export class ARManager {
       const delta = this.clock.getDelta();
       const time = this.clock.getElapsedTime();
 
-      if (this.contentAnchor) {
-        this.contentAnchor.update(time, delta);
+      for (const item of this.targetItems) {
+        item.contentAnchor.update(time, delta);
       }
 
       this.renderer.render(this.scene, this.camera);
@@ -165,31 +208,33 @@ export class ARManager {
   }
 
   recenter() {
-    // Smoothly recenter: re-evaluate anchor matrix and reset smoothing
-    if (this.anchor && this.anchor.group) {
-      this.anchor.group.matrixAutoUpdate = true;
-    }
-    if (this.contentAnchor) {
-      this.contentAnchor.videoPlane.restart();
-    }
+    // Smoothly recenter all targets
+    this.targetItems.forEach((item) => {
+      if (item.anchor && item.anchor.group) {
+        item.anchor.group.matrixAutoUpdate = true;
+      }
+      if (item.contentAnchor) {
+        item.contentAnchor.videoPlane.restart();
+      }
+    });
   }
 
   applyCalibration(calibration) {
     this.calibration = calibration;
-    if (this.contentAnchor) {
-      this.contentAnchor.applyCalibration(calibration);
-    }
+    this.targetItems.forEach((item) => {
+      item.contentAnchor.applyCalibration(calibration);
+    });
   }
 
   setAudioMuted(muted) {
-    if (this.contentAnchor) {
-      this.contentAnchor.setAudioMuted(muted);
-    }
+    this.targetItems.forEach((item) => {
+      item.contentAnchor.setAudioMuted(muted);
+    });
   }
 
   setVisualBoundsVisible(visible) {
-    if (this.contentAnchor) {
-      this.contentAnchor.setVisualBoundsVisible(visible);
-    }
+    this.targetItems.forEach((item) => {
+      item.contentAnchor.setVisualBoundsVisible(visible);
+    });
   }
 }

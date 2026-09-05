@@ -404,20 +404,31 @@
         <input type="file" id="fileInput" accept="image/png, image/jpeg, image/webp" style="display: none;">
       </div>
 
-      <div class="btn-group">
-        <button id="loadDefaultBtn" class="btn btn-secondary">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2v9.67z"/></svg>
-          Load /assets/event-poster.jpg
-        </button>
+      <div class="btn-group" style="display: flex; flex-direction: column; gap: 8px;">
+        <div style="display: flex; gap: 8px;">
+          <button id="loadPoster1Btn" class="btn btn-secondary" style="flex: 1;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2v9.67z"/></svg>
+            Poster 1
+          </button>
+          <button id="loadPoster2Btn" class="btn btn-secondary" style="flex: 1;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2v9.67z"/></svg>
+            Poster 2
+          </button>
+        </div>
 
         <button id="compileBtn" class="btn btn-primary" disabled>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>
-          Compile Image Target
+          Compile Current Image
+        </button>
+
+        <button id="compileBothBtn" class="btn btn-secondary" style="background: rgba(0, 240, 255, 0.15); border-color: var(--cyan); color: #fff;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H8V4h12v12z"/></svg>
+          Compile Both (Multi-Target: Poster 1 + 2)
         </button>
 
         <button id="downloadBtn" class="btn btn-accent" disabled>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/></svg>
-          Download targets.mind
+          Download Compiled .mind
         </button>
       </div>
 
@@ -481,8 +492,10 @@
 
     const dropzone = document.getElementById('dropzone');
     const fileInput = document.getElementById('fileInput');
-    const loadDefaultBtn = document.getElementById('loadDefaultBtn');
+    const loadPoster1Btn = document.getElementById('loadPoster1Btn');
+    const loadPoster2Btn = document.getElementById('loadPoster2Btn');
     const compileBtn = document.getElementById('compileBtn');
+    const compileBothBtn = document.getElementById('compileBothBtn');
     const downloadBtn = document.getElementById('downloadBtn');
     const progressContainer = document.getElementById('progressContainer');
     const progressBar = document.getElementById('progressBar');
@@ -499,8 +512,10 @@
     const statSize = document.getElementById('statSize');
 
     let currentImg = null;
+    let currentImgName = 'poster.png';
     let compiledBuffer = null;
     let compilerInstance = null;
+    let lastCompiledName = 'poster.mind';
 
     function log(msg, highlight = false) {
       const div = document.createElement('div');
@@ -508,6 +523,7 @@
       div.textContent = `> ${msg}`;
       logBox.appendChild(div);
       logBox.scrollTop = logBox.scrollHeight;
+      console.log('[Compiler]', msg);
     }
 
     // Dropzone handlers
@@ -528,18 +544,36 @@
       }
     });
 
-    loadDefaultBtn.addEventListener('click', async () => {
-      log('Loading default poster: /poster.png');
+    async function loadPosterBySrc(src, filename) {
+      log(`Loading poster image: ${src}`);
       try {
-        const res = await fetch('./poster.png');
+        const res = await fetch(src);
         const blob = await res.blob();
-        handleFile(new File([blob], 'poster.png', { type: 'image/png' }));
+        handleFile(new File([blob], filename, { type: 'image/png' }));
       } catch (err) {
-        log(`Failed to load default poster: ${err.message}`);
+        log(`Failed to load ${src}: ${err.message}`);
       }
+    }
+
+    loadPoster1Btn.addEventListener('click', () => {
+      currentImgName = 'poster.png';
+      lastCompiledName = 'poster.mind';
+      loadPosterBySrc('./poster.png', 'poster.png');
+    });
+
+    loadPoster2Btn.addEventListener('click', () => {
+      currentImgName = 'poster 2.png';
+      lastCompiledName = 'poster-2.mind';
+      loadPosterBySrc('./poster 2.png', 'poster 2.png');
     });
 
     function handleFile(file) {
+      currentImgName = file.name;
+      if (file.name.includes('2')) {
+        lastCompiledName = 'poster-2.mind';
+      } else {
+        lastCompiledName = 'poster.mind';
+      }
       log(`Selected file: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`);
       const reader = new FileReader();
       reader.onload = (e) => {
@@ -559,7 +593,7 @@
           statSize.textContent = '—';
 
           drawPreview(img);
-          log('Poster loaded into canvas. Click Compile to extract features.');
+          log(`Loaded ${file.name}. Target will save as: ${lastCompiledName}`);
         };
         img.src = e.target.result;
       };
@@ -579,12 +613,10 @@
       previewCanvas.height = h;
       const ctx = previewCanvas.getContext('2d');
 
-      // Draw base image slightly dimmed
       ctx.drawImage(img, 0, 0, w, h);
       ctx.fillStyle = 'rgba(4, 5, 8, 0.4)';
       ctx.fillRect(0, 0, w, h);
 
-      // Draw detected points
       if (points.length > 0) {
         points.forEach((pt) => {
           const px = pt.x * scale;
@@ -597,19 +629,37 @@
       }
     }
 
+    async function saveMindToServer(name, buffer) {
+      try {
+        const res = await fetch(`/__save_mind?name=${encodeURIComponent(name)}`, {
+          method: 'POST',
+          body: buffer
+        });
+        if (res.ok) {
+          log(`✓ Automatically saved target to targets/${name} & public/targets/${name}!`, true);
+          return true;
+        } else {
+          log(`Save server returned status ${res.status}`);
+          return false;
+        }
+      } catch (err) {
+        log(`Save to server failed: ${err.message}`);
+        return false;
+      }
+    }
+
     compileBtn.addEventListener('click', async () => {
       if (!currentImg) return;
       compileBtn.disabled = true;
-      loadDefaultBtn.disabled = true;
+      compileBothBtn.disabled = true;
       progressContainer.style.display = 'block';
       progressBar.style.width = '0%';
       progressPercent.textContent = '0%';
       progressStatus.textContent = 'Extracting feature descriptors...';
-      log('Starting MindAR feature compilation...', true);
+      log(`Starting compilation for ${currentImgName}...`, true);
 
       try {
         compilerInstance = new Compiler();
-        
         await compilerInstance.compileImageTargets([currentImg], (percent) => {
           const p = Math.min(100, Math.round(percent));
           progressBar.style.width = `${p}%`;
@@ -621,12 +671,10 @@
           }
         });
 
-        log('Feature extraction completed! Generating binary target...', true);
         compiledBuffer = await compilerInstance.exportData();
         const byteSize = compiledBuffer.byteLength;
         statSize.textContent = `${(byteSize / 1024).toFixed(1)} KB`;
 
-        // Extract feature points for visualization
         let totalPoints = 0;
         const visualPoints = [];
         if (compilerInstance.data && compilerInstance.data[0]) {
@@ -644,30 +692,20 @@
         }
 
         statPoints.textContent = `${totalPoints} keypoints`;
-        if (totalPoints > 400) {
-          statQuality.innerHTML = '<span class="badge success">★★★★★ Excellent</span>';
-        } else if (totalPoints > 150) {
-          statQuality.innerHTML = '<span class="badge success">★★★★ Good</span>';
-        } else {
-          statQuality.innerHTML = '<span class="badge">★★★ Moderate</span>';
-        }
+        statQuality.innerHTML = totalPoints > 300 
+          ? '<span class="badge success">★★★★★ Excellent</span>'
+          : '<span class="badge">★★★★ Good</span>';
 
         drawPreview(currentImg, visualPoints);
         downloadBtn.disabled = false;
         progressStatus.textContent = 'Compilation complete!';
-        log(`Success! Target compiled with ${totalPoints} features (${(byteSize / 1024).toFixed(1)} KB).`, true);
+        log(`Compiled ${totalPoints} features (${(byteSize / 1024).toFixed(1)} KB).`, true);
 
-        // Auto-save to /targets/poster.mind via Vite middleware
-        try {
-          const saveRes = await fetch('/__save_mind?name=poster.mind', {
-            method: 'POST',
-            body: compiledBuffer
-          });
-          if (saveRes.ok) {
-            log('✓ Automatically saved target to /targets/poster.mind & public/targets/poster.mind!', true);
-          }
-        } catch (saveErr) {
-          console.warn('Auto-save endpoint notice:', saveErr);
+        // Auto-save primary target and aliases
+        await saveMindToServer(lastCompiledName, compiledBuffer);
+        if (lastCompiledName === 'poster-2.mind') {
+          await saveMindToServer('poster2.mind', compiledBuffer);
+          await saveMindToServer('poster 2.mind', compiledBuffer);
         }
       } catch (err) {
         console.error(err);
@@ -675,7 +713,61 @@
         log(`Compilation failed: ${err.message}`);
       } finally {
         compileBtn.disabled = false;
-        loadDefaultBtn.disabled = false;
+        compileBothBtn.disabled = false;
+      }
+    });
+
+    compileBothBtn.addEventListener('click', async () => {
+      compileBtn.disabled = true;
+      compileBothBtn.disabled = true;
+      progressContainer.style.display = 'block';
+      progressBar.style.width = '0%';
+      progressPercent.textContent = '0%';
+      progressStatus.textContent = 'Loading Poster 1 & Poster 2...';
+      log('Starting Multi-Target compilation (Poster 1 + Poster 2)...', true);
+
+      try {
+        const loadImg = (src) => new Promise((resolve, reject) => {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => resolve(img);
+          img.onerror = () => reject(new Error('Failed to load ' + src));
+          img.src = src;
+        });
+
+        const [img1, img2] = await Promise.all([
+          loadImg('./poster.png'),
+          loadImg('./poster 2.png')
+        ]);
+
+        log('Loaded both images. Compiling target 0 (poster 1) and target 1 (poster 2)...');
+        compilerInstance = new Compiler();
+        await compilerInstance.compileImageTargets([img1, img2], (percent) => {
+          const p = Math.min(100, Math.round(percent));
+          progressBar.style.width = `${p}%`;
+          progressPercent.textContent = `${p}%`;
+          progressStatus.textContent = `Compiling multi-target (${p}%)`;
+        });
+
+        compiledBuffer = await compilerInstance.exportData();
+        const byteSize = compiledBuffer.byteLength;
+        statSize.textContent = `${(byteSize / 1024).toFixed(1)} KB (Multi-Target)`;
+        statPoints.textContent = '2 Targets compiled';
+        statQuality.innerHTML = '<span class="badge success">★★★★★ Multi-Target Ready</span>';
+        progressStatus.textContent = 'Multi-target compiled successfully!';
+        lastCompiledName = 'targets.mind';
+        downloadBtn.disabled = false;
+
+        log(`Multi-target compiled (${(byteSize / 1024).toFixed(1)} KB)! Saving to targets.mind...`, true);
+        await saveMindToServer('targets.mind', compiledBuffer);
+        await saveMindToServer('poster-all.mind', compiledBuffer);
+      } catch (err) {
+        console.error(err);
+        progressStatus.textContent = 'Multi-target compilation error';
+        log(`Multi-target compile failed: ${err.message}`);
+      } finally {
+        compileBtn.disabled = false;
+        compileBothBtn.disabled = false;
       }
     });
 
@@ -685,32 +777,64 @@
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'poster.mind';
+      a.download = lastCompiledName || 'targets.mind';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      log('Downloaded "event-poster.mind"');
+      log(`Downloaded ${lastCompiledName}`);
     });
 
-    // Automatically load default poster on open
-    window.addEventListener('DOMContentLoaded', () => {
-      loadDefaultBtn.click();
-    });
-
-    // Expose compile function globally for automation / headless tasks
-    window.__autoCompileDefault = async function() {
-      await new Promise(r => setTimeout(r, 800));
+    // Expose helpers globally
+    window.__compilePoster2 = async function() {
+      loadPoster2Btn.click();
+      await new Promise(r => setTimeout(r, 600));
       compileBtn.click();
-      return new Promise((resolve, reject) => {
+      return new Promise((resolve) => {
         const check = setInterval(() => {
-          if (compiledBuffer) {
+          if (compiledBuffer && lastCompiledName.includes('2')) {
             clearInterval(check);
             resolve(compiledBuffer);
           }
         }, 500);
       });
     };
+
+    window.__compileMulti = async function() {
+      compileBothBtn.click();
+      return new Promise((resolve) => {
+        const check = setInterval(() => {
+          if (compiledBuffer && lastCompiledName === 'targets.mind') {
+            clearInterval(check);
+            resolve(compiledBuffer);
+          }
+        }, 500);
+      });
+    };
+
+    window.__compileAllBothAndSingle = async function() {
+      log('Starting automated full compilation batch...');
+      await window.__compilePoster2();
+      await new Promise(r => setTimeout(r, 1000));
+      await window.__compileMulti();
+      log('All targets compiled and saved successfully!');
+      window.__batchDone = true;
+      return true;
+    };
+
+    // Auto-execute if query param present
+    window.addEventListener('DOMContentLoaded', async () => {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('auto') === 'all') {
+        setTimeout(() => window.__compileAllBothAndSingle(), 500);
+      } else if (params.get('auto') === 'poster2') {
+        setTimeout(() => window.__compilePoster2(), 500);
+      } else if (params.get('auto') === 'multi') {
+        setTimeout(() => window.__compileMulti(), 500);
+      } else {
+        loadPoster1Btn.click();
+      }
+    });
   </script>
 </body>
 </html>

@@ -9,7 +9,7 @@ import { BoundsVisualizer } from './bounds-visualizer.js';
  * Hosts all AR visual elements anchored to the physical poster and applies calibrated transforms.
  */
 export class ContentAnchor {
-  constructor({ targetWidth = 1.0, targetHeight = 1.34, videoSrc, calibration }) {
+  constructor({ targetWidth = 1.0, targetHeight = 1.34, videoSrc, fallbacks = [], calibration }) {
     this.targetWidth = targetWidth;
     this.targetHeight = targetHeight;
     this.calibration = { ...calibration };
@@ -28,7 +28,8 @@ export class ContentAnchor {
       src: videoSrc,
       aspectRatio: targetWidth / targetHeight,
       startOffset: this.calibration.videoStartOffset || 0,
-      width: targetWidth
+      width: targetWidth,
+      fallbacks
     });
     this.contentGroup.add(this.videoPlane.mesh);
 

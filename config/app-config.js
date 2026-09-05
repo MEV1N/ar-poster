@@ -3,19 +3,57 @@
  */
 import defaultCalibration from './default-calibration.json';
 
-export const APP_CONFIG = {
-  // Target poster configuration
-  target: {
-    name: 'Event Poster Target',
+/**
+ * Target & Video Registry
+ * 
+ * TO ADD MORE POSTERS AND VIDEOS:
+ * 1. Place the new poster image in public/ (e.g. 'poster 3.png')
+ * 2. Place the new video file in public/ (e.g. 'video 3.mp4')
+ * 3. Add a new object entry to the TARGETS array below:
+ *      {
+ *        id: 'poster-3',
+ *        name: 'Poster 3',
+ *        imageSrc: './poster 3.png',
+ *        videoSrc: './video 3.mp4',
+ *        aspectRatio: 941 / 1672
+ *      }
+ * 4. Run `npm run compile-targets` in your terminal to compile all posters into targets.mind!
+ */
+export const TARGETS = [
+  {
+    id: 'poster-1',
+    name: 'Poster 1',
     imageSrc: './poster.png',
-    mindSrc: './targets/poster.mind',
-    // Physical aspect ratio of poster.png (941 / 1672)
+    videoSrc: './video.mp4',
     aspectRatio: 941 / 1672,
-    originalWidth: 941,
-    originalHeight: 1672
+    fallbackVideos: ['./videos/video.mp4', './video.mp4']
   },
+  {
+    id: 'poster-2',
+    name: 'Poster 2',
+    imageSrc: './poster 2.png',
+    videoSrc: './video 2.mp4',
+    aspectRatio: 941 / 1672,
+    fallbackVideos: [
+      './video-2.mp4',
+      './video2.mp4',
+      './videos/video 2.mp4',
+      './videos/video-2.mp4'
+    ]
+  }
+];
 
-  // Primary AR Video asset configuration
+export const APP_CONFIG = {
+  // Multi-target tracking file containing compiled keypoints for all posters
+  mindSrc: './targets/targets.mind',
+
+  // Configured posters and their associated AR videos
+  targets: TARGETS,
+
+  // Default target fallback
+  target: TARGETS[0],
+
+  // Primary video fallback
   video: {
     src: './video.mp4',
     loop: true,

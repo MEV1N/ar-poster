@@ -6,12 +6,14 @@ import * as THREE from 'three';
  */
 export class VideoPlane {
   constructor({
-    src = './videos/event-promo.mp4',
-    aspectRatio = 0.74667,
+    src = './video.mp4',
+    aspectRatio = 0.5628,
     startOffset = 0.0,
-    width = 1.0
+    width = 1.0,
+    fallbacks = []
   }) {
     this.src = src;
+    this.fallbacks = Array.isArray(fallbacks) ? fallbacks : [];
     this.aspectRatio = aspectRatio;
     this.startOffset = startOffset;
     this.width = width;
@@ -40,23 +42,28 @@ export class VideoPlane {
     this.video.muted = true;
     this.video.preload = 'auto';
 
-    const fallbackSources = [
+    // Candidate URL resolution (handles spaces, URL encoding, and fallback files)
+    const baseName = this.src ? this.src.split('/').pop() : '';
+    const rawCandidates = [
       this.src,
-      './video.mp4',
-      './videos/useless video.mp4',
-      './videos/video.mp4',
-      './videos/event-promo.mp4'
+      this.src ? encodeURI(this.src) : null,
+      ...this.fallbacks,
+      baseName ? `./videos/${baseName}` : null,
+      baseName ? encodeURI(`./videos/${baseName}`) : null
     ];
+    const uniqueSources = [...new Set(rawCandidates.filter(Boolean))];
     let sourceIndex = 0;
 
-    this.video.src = fallbackSources[sourceIndex];
+    this.video.src = uniqueSources[sourceIndex];
 
-    this.video.addEventListener('error', () => {
+    this.video.addEventListener('error', (e) => {
       sourceIndex++;
-      if (sourceIndex < fallbackSources.length) {
-        this.video.src = fallbackSources[sourceIndex];
+      if (sourceIndex < uniqueSources.length) {
+        console.warn(`Video source ${uniqueSources[sourceIndex - 1]} failed, trying fallback: ${uniqueSources[sourceIndex]}`);
+        this.video.src = uniqueSources[sourceIndex];
         this.video.load();
       } else {
+        console.warn('All video sources failed, switching to dynamic cyberpunk AR visualizer:', e);
         this.enableDynamicCanvas();
       }
     });

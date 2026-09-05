@@ -142,12 +142,10 @@ class SimpleWebARApp {
 
       this.arManager = new ARManager({
         container: this.arContainer,
-        imageTargetSrc: APP_CONFIG.target.mindSrc,
-        targetWidth: 1.0,
-        targetHeight: 1.0 / APP_CONFIG.target.aspectRatio,
-        videoSrc: APP_CONFIG.video.src,
+        imageTargetSrc: APP_CONFIG.mindSrc || './targets/targets.mind',
+        targets: APP_CONFIG.targets || [APP_CONFIG.target],
         calibration: initialCalib,
-        onTrackingStateChange: (state) => {
+        onTrackingStateChange: (state, activeTarget) => {
           if (state === 'tracking') {
             this.isTracking = true;
             if (this.promptEl) this.promptEl.classList.add('hidden');

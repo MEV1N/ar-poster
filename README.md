@@ -1,19 +1,69 @@
-# Production-Ready WebAR Image-Tracking Experience for Event Poster
+# WebAR Multi-Target Experience for Event Posters
 
-A high-performance, mobile-first WebAR application that detects and tracks a physical event poster using optical feature-tracking (**MindAR + Three.js**). When recognized through the phone camera, a synchronized AR video, pulsing holographic cyber-borders, 3D particle vortex, and spatial audio project directly onto the poster with real-time perspective locking.
+A high-performance, mobile-first WebAR application that detects and tracks multiple physical event posters using optical feature-tracking (**MindAR + Three.js**). When recognized through the phone camera, the corresponding synchronized AR video, pulsing holographic borders, 3D particle vortex, and spatial audio project directly onto the poster with real-time perspective locking.
+
+- **Poster 1 (`poster.png`)** ➔ Plays **`video.mp4`**
+- **Poster 2 (`poster 2.png`)** ➔ Plays **`video 2.mp4`**
+- **Public Access**: Only the camera page (`/index.html` or `/`) is publicly accessible. All other pages are disabled/restricted.
 
 Works on modern **Android Chrome** and **iOS Safari (iOS 14+)** without requiring any app store downloads or plugins.
 
 ---
 
-## Live Demo & Pages
+## Adding More Targets & Videos in 3 Simple Steps
 
-| Page | URL Path | Description |
-| :--- | :--- | :--- |
-| **WebAR Experience** | [`/index.html`](http://localhost:5173/index.html) | Public AR camera scanner with loading screen, optical guidance, and audio unlock. |
-| **Calibration Studio** | [`/index.html?mode=calibration`](http://localhost:5173/index.html?mode=calibration) | Admin/Developer calibration studio with real-time transform sliders, 3D visual bounding box, and JSON export/import. |
-| **Target Poster Reference** | [`/poster.html`](http://localhost:5173/poster.html) | Fullscreen printable/displayable event poster with QR code and instructions. |
-| **Target Compiler Studio** | [`/compiler.html`](http://localhost:5173/compiler.html) | In-browser MindAR compiler tool: drag-and-drop any poster image, inspect feature density, and generate `.mind` targets. |
+Adding new posters and videos is completely declarative and automated:
+
+### 1. Place the Assets in `public/`
+Drop your new poster image and video into the `public/` folder:
+- e.g. `public/poster 3.png`
+- e.g. `public/video 3.mp4`
+
+### 2. Register the Target in `config/app-config.js`
+Open [`config/app-config.js`](file:///c:/Users/mevin_z1mcnwj/Desktop/ar%20poster/config/app-config.js) and add an entry to the `TARGETS` array:
+```javascript
+export const TARGETS = [
+  {
+    id: 'poster-1',
+    name: 'Poster 1',
+    imageSrc: './poster.png',
+    videoSrc: './video.mp4',
+    aspectRatio: 941 / 1672
+  },
+  {
+    id: 'poster-2',
+    name: 'Poster 2',
+    imageSrc: './poster 2.png',
+    videoSrc: './video 2.mp4',
+    aspectRatio: 941 / 1672
+  },
+  // Add your new target here:
+  {
+    id: 'poster-3',
+    name: 'Poster 3',
+    imageSrc: './poster 3.png',
+    videoSrc: './video 3.mp4',
+    aspectRatio: 941 / 1672
+  }
+];
+```
+
+### 3. Compile the Target Features
+Run the compilation command in your terminal:
+```bash
+npm run compile-targets
+```
+This automatically compiles feature keypoints for all posters into `public/targets/targets.mind`. The WebAR app will now instantly recognize and track all registered posters!
+
+---
+
+## Pages & Access Control
+
+| Page | URL Path | Access | Description |
+| :--- | :--- | :--- | :--- |
+| **WebAR Camera Experience** | `/index.html` or `/` | **Public** | Clean, mobile WebAR camera view that tracks all posters. |
+| **Admin Calibration Studio** | `/?admin=true` or triple-tap | **Admin** | Slide-out calibration tool for fine-tuning AR offsets. |
+| **Compiler Tool** | `tools/compiler.html` | **Internal** | Offline target generator used by `npm run compile-targets`. |
 
 ---
 
@@ -21,48 +71,32 @@ Works on modern **Android Chrome** and **iOS Safari (iOS 14+)** without requirin
 
 ```
 ar-poster/
-├── index.html                   # Main WebAR application entry point
-├── poster.html                  # Reference printable / on-screen poster viewer
-├── compiler.html                # Built-in MindAR Image Target Compiler & feature viewer
+├── index.html                   # Sole public WebAR camera entry point
 ├── main.js                      # Application controller & state coordinator
 ├── main.css                     # Mobile-first glassmorphism design system
-├── package.json                 # Scripts and dependencies
-├── vite.config.js               # Dev server, HTTPS settings, auto-save endpoint
+├── package.json                 # Scripts (dev, build, preview, compile-targets)
+├── vite.config.js               # Dev server & single-page production bundler
 │
-├── /assets/                     # Static target assets & icons
-│   ├── event-poster.jpg         # High-contrast 896x1200 target poster image
-│   └── qr-sample.png            # QR code sample pointing to experience
+├── config/
+│   └── app-config.js            # TARGETS registry (add new posters & videos here!)
 │
-├── /targets/                    # Compiled binary feature descriptor targets
-│   └── event-poster.mind        # MindAR compiled binary feature target
-│
-├── /videos/                     # AR video assets
-│   └── event-promo.mp4          # High-energy event promo video
-│
-├── /animations/                 # AR 3D shader and dynamic visual systems
-│   ├── holo-border.js           # Animated cyber reticle & pulsing scanlines
-│   └── particle-system.js       # 3D particle sparks & ambient vortex
-│
-├── /components/                 # Modular public UI components
-│   ├── loading-screen.js        # Loading & camera permissions modal
-│   ├── tracking-hud.js          # Public mobile guidance HUD (detected/lost/recenter)
-│   ├── unmute-overlay.js        # Mobile autoplay policy audio unlock toast
-│   └── fallback-view.js         # Graceful fallback for non-WebAR/non-camera devices
-│
-├── /ar/                         # Core WebAR Tracking Engine
-│   ├── ar-manager.js            # MindAR & Three.js lifecycle, start/stop/recenter
-│   ├── video-plane.js           # Three.js AR video plane mesh, texture, playback
+├── ar/                          # WebAR Tracking Engine
+│   ├── ar-manager.js            # Multi-target MindAR lifecycle coordinator
+│   ├── video-plane.js           # Multi-video texture mapping & fallback loader
 │   ├── content-anchor.js        # Anchor group, smoothing filter, debounce logic
 │   └── bounds-visualizer.js     # 3D calibration bounding box & corner markers
 │
-├── /calibration/                # Administrator / Developer Calibration Studio
-│   ├── calibration-manager.js   # State store, save/load/reset/export/import JSON
-│   ├── calibration-panel.js     # Floating glassmorphic calibration UI & inputs
-│   └── calibration-panel.css    # Responsive styles for calibration studio
+├── tools/                       # Internal tools (excluded from public build)
+│   ├── compile-targets.mjs      # Automated CLI compiler (`npm run compile-targets`)
+│   ├── compiler.html            # MindAR Image Target Compiler UI
+│   └── poster.html              # Printable/on-screen reference poster viewer
 │
-└── /config/                     # Configuration files
-    ├── default-calibration.json # Default calibration parameters (position, scale, etc.)
-    └── app-config.js            # App settings (paths, target aspect ratio, audio)
+├── public/                      # Static assets served at root
+│   ├── poster.png               # Poster 1
+│   ├── poster 2.png             # Poster 2
+│   ├── video.mp4                # Video 1 (linked to Poster 1)
+│   ├── video 2.mp4              # Video 2 (linked to Poster 2)
+│   └── targets/targets.mind     # Compiled multi-target tracking descriptors
 ```
 
 ---
@@ -79,14 +113,16 @@ Vite will start and display your local and LAN URLs:
 ➜  Network: http://192.168.x.x:5173/
 ```
 
-### 2. Display the Poster Target
-Open [`http://localhost:5173/poster.html`](http://localhost:5173/poster.html) on a second computer screen, tablet, or print it out.
+### 2. Display the Posters to Test
+Open `public/poster.png` or `public/poster 2.png` on another screen, tablet, or print them out.
+- Scanning **Poster 1** will play **Video 1 (`video.mp4`)**.
+- Scanning **Poster 2** will play **Video 2 (`video 2.mp4`)**.
 
 ### 3. Open WebAR on Mobile Phone
-- Scan the QR code on the poster page or visit `http://<YOUR-LAN-IP>:5173/` on your phone (connected to the same Wi-Fi).
-- Tap **"ENTER AR EXPERIENCE"** and allow camera permission.
-- Point your rear camera at the poster.
-- The AR video, holographic border, and particles will snap and lock onto the poster!
+- Visit `http://<YOUR-LAN-IP>:5173/` on your phone (connected to the same Wi-Fi).
+- Tap the screen and allow camera permission.
+- Point your rear camera at either poster.
+- The corresponding AR video, holographic border, and audio will snap and lock onto the poster!
 
 ---
 
