@@ -37,7 +37,8 @@ export class TrackingCoordinator {
       predictionDuration: options.predictionDuration ?? 800, // ms
       lostTargetTimeout: options.lostTargetTimeout ?? 1200, // ms
       recoveryBlendDuration: options.recoveryBlendDuration ?? 250, // ms
-      filterBeta: options.filterBeta ?? 80.0,
+      smoothing: options.smoothing ?? 0.85,
+      filterBeta: options.filterBeta ?? 0.005,
       enableDeviceMotion: options.enableDeviceMotion !== false,
       enableMotionFusion: options.enableMotionFusion !== false,
       maxPoseCorrection: options.maxPoseCorrection ?? 0.8, // meters
@@ -58,6 +59,12 @@ export class TrackingCoordinator {
         state: 'LOST', // 'LOCKED' | 'GOOD' | 'DEGRADED' | 'PREDICTING' | 'LOST'
         confidence: 0,
         historicalConfidence: 0,
+
+        // Anti-Jitter Smoothed Pose Filter State
+        smoothPos: new THREE.Vector3(),
+        smoothQuat: new THREE.Quaternion(),
+        smoothScale: new THREE.Vector3(1, 1, 1),
+        hasSmoothPose: false,
 
         // Absolute visual reference pose at time of last visual lock
         refVisualMatrix: new THREE.Matrix4(),
@@ -174,12 +181,62 @@ export class TrackingCoordinator {
         _scratchBlendScale.lerp(_scratchRawScale, s);
         t.fusedMatrix.compose(_scratchBlendPos, _scratchBlendQuat, _scratchBlendScale);
 
+        t.smoothPos.copy(_scratchBlendPos);
+        t.smoothQuat.copy(_scratchBlendQuat);
+        t.smoothScale.copy(_scratchBlendScale);
+        t.hasSmoothPose = true;
+
         if (progress >= 1.0) {
           t.isBlendingReacquisition = false;
         }
       } else {
-        // Direct visual tracking
-        t.fusedMatrix.copy(rawMatrix);
+        // Direct visual tracking with Anti-Jitter Adaptive Low-Pass Filter
+        if (!t.hasSmoothPose || t.consecutiveHits <= 1) {
+          t.smoothPos.copy(_scratchRawPos);
+          t.smoothQuat.copy(_scratchRawQuat);
+          t.smoothScale.copy(_scratchRawScale);
+          t.hasSmoothPose = true;
+          t.fusedMatrix.copy(rawMatrix);
+        } else {
+          // Distance and angular change between raw measurement and smoothed pose
+          const framePosDelta = t.smoothPos.distanceTo(_scratchRawPos);
+          const dot = Math.min(1, Math.max(-1, Math.abs(t.smoothQuat.dot(_scratchRawQuat))));
+          const frameAngleDelta = 2 * Math.acos(dot);
+
+          // Configurable smoothing factor (default 0.85 = 85% previous pose, 15% new measurement)
+          const baseSmoothing = Math.min(0.95, Math.max(0.5, this.options.smoothing ?? 0.85));
+
+          // Base responsiveness (alpha = 1 - smoothing)
+          let posAlpha = 1.0 - baseSmoothing;
+          let rotAlpha = 1.0 - baseSmoothing;
+
+          if (framePosDelta > 0.03) {
+            // Rapid transition for intentional hand translation
+            posAlpha = Math.min(0.85, posAlpha + (framePosDelta - 0.03) * 5.0);
+          } else if (framePosDelta < 0.006) {
+            // Deadband micro-stabilization: lock position when camera is stationary
+            posAlpha *= 0.4;
+          }
+
+          if (frameAngleDelta > 0.04) {
+            // Rapid transition for intentional camera rotation
+            rotAlpha = Math.min(0.85, rotAlpha + (frameAngleDelta - 0.04) * 4.0);
+          } else if (frameAngleDelta < 0.008) {
+            // Deadband angular micro-stabilization: lock rotation when stationary
+            rotAlpha *= 0.4;
+          }
+
+          // Frame-rate independent delta normalization (target 60 FPS dt = 0.0166)
+          const dtFactor = Math.min(2.5, dt / 0.0166);
+          const effectivePosLerp = Math.min(1.0, posAlpha * dtFactor);
+          const effectiveRotSlerp = Math.min(1.0, rotAlpha * dtFactor);
+
+          t.smoothPos.lerp(_scratchRawPos, effectivePosLerp);
+          t.smoothQuat.slerp(_scratchRawQuat, effectiveRotSlerp);
+          t.smoothScale.lerp(_scratchRawScale, Math.min(1.0, 0.2 * dtFactor));
+
+          t.fusedMatrix.compose(t.smoothPos, t.smoothQuat, t.smoothScale);
+        }
       }
 
       // Kinematics & delta tracking
@@ -277,11 +334,15 @@ export class TrackingCoordinator {
           _scratchPredQuat.multiplyQuaternions(_scratchDeltaR, _scratchRefQuat);
 
           t.fusedMatrix.compose(_scratchPredPos, _scratchPredQuat, _scratchRefScale);
+          t.smoothPos.copy(_scratchPredPos);
+          t.smoothQuat.copy(_scratchPredQuat);
         } else {
           // Fallback: hold reference orientation and apply damped velocity
           const missDtSec = missedMs / 1000;
           _scratchPredPos.copy(_scratchRefPos).addScaledVector(t.linearVelocity, missDtSec * damping);
           t.fusedMatrix.compose(_scratchPredPos, _scratchRefQuat, _scratchRefScale);
+          t.smoothPos.copy(_scratchPredPos);
+          t.smoothQuat.copy(_scratchRefQuat);
         }
 
         // Gradually decay confidence during prediction
@@ -407,6 +468,7 @@ export class TrackingCoordinator {
       t.predictStartTime = 0;
       t.isPredicting = false;
       t.isHoldingPose = false;
+      t.hasSmoothPose = false;
     }
   }
 

@@ -260,7 +260,7 @@ export class CalibrationPanel {
         minInliers: 6,
         idealInliers: 26,
         filterMinCF: 0.001,
-        filterBeta: 80.0,
+        filterBeta: 0.005,
         enableDeviceMotion: true,
         position: { x: 0, y: 0, z: 0 },
         scale: 1.0,

@@ -122,6 +122,13 @@ export function getSavedCalibration() {
     const raw = localStorage.getItem('ar_poster_calibration_v1');
     if (raw) {
       const parsed = JSON.parse(raw);
+      // Auto-migrate stale high filterBeta (80.0) from previous versions to jitter-free 0.005
+      if (parsed.filterBeta && parsed.filterBeta >= 1.0) {
+        parsed.filterBeta = APP_CONFIG.defaultCalibration.filterBeta;
+      }
+      if (!parsed.smoothing) {
+        parsed.smoothing = APP_CONFIG.defaultCalibration.smoothing;
+      }
       return {
         ...APP_CONFIG.defaultCalibration,
         ...parsed,

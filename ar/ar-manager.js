@@ -52,7 +52,8 @@ export class ARManager {
       predictionDuration: this.calibration.predictionDuration || 800,
       lostTargetTimeout: this.calibration.lostTargetTimeout || 1200,
       recoveryBlendDuration: this.calibration.recoveryBlendDuration || 250,
-      filterBeta: this.calibration.filterBeta || 80.0,
+      smoothing: this.calibration.smoothing ?? 0.85,
+      filterBeta: this.calibration.filterBeta ?? 0.005,
       enableDeviceMotion: this.calibration.enableDeviceMotion !== false,
       enableMotionFusion: this.calibration.enableMotionFusion !== false,
       maxPoseCorrection: this.calibration.maxPoseCorrection || 0.8,
@@ -84,12 +85,12 @@ export class ARManager {
       throw new Error('MindAR Three.js library could not be loaded.');
     }
 
-    // Initialize MindAR Three instance
+    // Initialize MindAR Three instance with calibrated anti-jitter filter parameters
     this.mindarThree = new MindARThreeClass({
       container: this.container,
       imageTargetSrc: this.imageTargetSrc,
-      filterMinCF: this.calibration.filterMinCF || 0.0001,
-      filterBeta: this.calibration.filterBeta || 0.001,
+      filterMinCF: this.calibration.filterMinCF ?? 0.001,
+      filterBeta: this.calibration.filterBeta ?? 0.005,
       warmupTolerance: this.calibration.warmupTolerance || 2,
       missTolerance: this.calibration.missTolerance || 8,
       uiLoading: 'no',
@@ -365,6 +366,7 @@ export class ARManager {
       predictionDuration: this.calibration.predictionDuration,
       lostTargetTimeout: this.calibration.lostTargetTimeout,
       recoveryBlendDuration: this.calibration.recoveryBlendDuration,
+      smoothing: this.calibration.smoothing ?? 0.85,
       filterBeta: this.calibration.filterBeta,
       enableDeviceMotion: this.calibration.enableDeviceMotion !== false,
       enableMotionFusion: this.calibration.enableMotionFusion !== false,

@@ -38,9 +38,11 @@ export class VideoPlane {
     this.video.playsInline = true;
     this.video.setAttribute('webkit-playsinline', 'true');
     this.video.setAttribute('playsinline', 'true');
+    this.video.setAttribute('preload', 'auto');
     this.video.loop = true;
     this.video.muted = true;
     this.video.preload = 'auto';
+    this.video.disableRemotePlayback = true;
 
     // Candidate URL resolution (handles spaces, URL encoding, and fallback files)
     const baseName = this.src ? this.src.split('/').pop() : '';
@@ -69,9 +71,14 @@ export class VideoPlane {
     });
 
     this.texture = new THREE.VideoTexture(this.video);
+    this.texture.generateMipmaps = false;
     this.texture.minFilter = THREE.LinearFilter;
     this.texture.magFilter = THREE.LinearFilter;
     this.texture.format = THREE.RGBAFormat;
+  }
+
+  get isPaused() {
+    return !this.video || this.video.paused;
   }
 
   enableDynamicCanvas() {
@@ -82,6 +89,7 @@ export class VideoPlane {
     this.ctx = this.canvas.getContext('2d');
 
     this.texture = new THREE.CanvasTexture(this.canvas);
+    this.texture.generateMipmaps = false;
     this.texture.minFilter = THREE.LinearFilter;
     this.texture.magFilter = THREE.LinearFilter;
 
@@ -98,7 +106,8 @@ export class VideoPlane {
       side: THREE.DoubleSide,
       transparent: true,
       opacity: 1.0,
-      toneMapped: false
+      toneMapped: false,
+      depthWrite: false
     });
 
     this.mesh = new THREE.Mesh(geometry, this.material);
