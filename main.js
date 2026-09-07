@@ -3,6 +3,7 @@ import { APP_CONFIG, getSavedCalibration } from './config/app-config.js';
 import { ARManager } from './ar/ar-manager.js';
 import { CalibrationManager } from './calibration/calibration-manager.js';
 import { CalibrationPanel } from './calibration/calibration-panel.js';
+import { DebugHUD } from './components/debug-hud.js';
 
 class SimpleWebARApp {
   constructor() {
@@ -10,6 +11,7 @@ class SimpleWebARApp {
     this.arManager = null;
     this.calibrationManager = null;
     this.calibrationPanel = null;
+    this.debugHUD = null;
     this.promptEl = null;
     this.startOverlay = null;
     this.adminBtn = null;
@@ -32,26 +34,42 @@ class SimpleWebARApp {
       }
     });
 
-    // 2. Initialize Calibration Panel (Admin Studio)
+    // 2. Initialize Developer Debug HUD
+    this.debugHUD = new DebugHUD({
+      onOpenCalibration: () => this.toggleAdmin(true)
+    });
+
+    // 3. Initialize Calibration Panel (Admin Studio)
     this.calibrationPanel = new CalibrationPanel({
       manager: this.calibrationManager,
       onClose: () => {
         this.toggleAdmin(false);
+      },
+      onToggleDebugHUD: (visible) => {
+        if (visible) this.debugHUD.show();
+        else this.debugHUD.hide();
       }
     });
 
     this.createUI();
     await this.initAR();
 
-    // Check if admin mode was requested in URL (e.g. ?admin=true or ?mode=calibration)
+    // Check URL parameters for admin or debug modes
     const params = new URLSearchParams(window.location.search);
-    if (params.has('admin') || params.get('mode') === 'calibration' || window.location.hash === '#admin') {
+    const hash = window.location.hash;
+
+    if (params.has('admin') || params.get('mode') === 'calibration' || hash === '#admin') {
       this.toggleAdmin(true);
+    }
+
+    const initialCalib = this.calibrationManager.get();
+    if (params.has('debug') || hash === '#debug' || initialCalib.showDebugHUD) {
+      this.debugHUD.show();
     }
   }
 
   createUI() {
-    // Single Minimalist Guidance Text
+    // Minimalist Guidance Text
     const overlay = document.createElement('div');
     overlay.className = 'prompt-overlay';
     overlay.innerHTML = `
@@ -60,7 +78,7 @@ class SimpleWebARApp {
     document.body.appendChild(overlay);
     this.promptEl = overlay.querySelector('#promptBadge');
 
-    // Subtle Admin Gear Button in top-right corner
+    // Admin Gear Button in top-right corner
     this.adminBtn = document.createElement('button');
     this.adminBtn.className = 'admin-gear-btn';
     this.adminBtn.id = 'adminGearBtn';
@@ -91,8 +109,8 @@ class SimpleWebARApp {
 
     // Tap anywhere on screen to unmute / toggle audio
     window.addEventListener('click', (e) => {
-      // Ignore clicks inside admin panel or on admin button
-      if (e.target.closest('#calibrationPanel') || e.target.closest('#adminGearBtn')) {
+      // Ignore clicks inside admin panel, HUD, or on admin button
+      if (e.target.closest('#calibrationPanel') || e.target.closest('#adminGearBtn') || e.target.closest('#debugHUD')) {
         return;
       }
 
@@ -145,9 +163,12 @@ class SimpleWebARApp {
         imageTargetSrc: APP_CONFIG.mindSrc || './targets/targets.mind',
         targets: APP_CONFIG.targets || [APP_CONFIG.target],
         calibration: initialCalib,
-        onTrackingStateChange: (state, activeTarget) => {
+        onTrackingStateChange: (state, activeTarget, stats) => {
           if (state === 'tracking') {
             this.isTracking = true;
+            if (this.promptEl) this.promptEl.classList.add('hidden');
+          } else if (state === 'predicting') {
+            // Keep prompt hidden during temporary occlusion / predictive hold
             if (this.promptEl) this.promptEl.classList.add('hidden');
           } else if (state === 'lost') {
             this.isTracking = false;
@@ -158,6 +179,11 @@ class SimpleWebARApp {
           if (this.arManager) {
             this.arManager.setAudioMuted(false);
             this.isMuted = false;
+          }
+        },
+        onTelemetryUpdate: (targetDef, stats, confidence) => {
+          if (this.debugHUD) {
+            this.debugHUD.updateTelemetry(targetDef, stats, confidence);
           }
         }
       });

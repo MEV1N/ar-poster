@@ -2,12 +2,14 @@ import './calibration-panel.css';
 
 /**
  * Interactive Calibration Studio UI Component
- * Provides live fine-tuning controls, numeric inputs, visual bounds toggle, and JSON save/export.
+ * Provides live fine-tuning controls, numeric inputs, visual bounds toggle,
+ * advanced predictive tracking parameters, and JSON save/export.
  */
 export class CalibrationPanel {
-  constructor({ manager, onClose }) {
+  constructor({ manager, onClose, onToggleDebugHUD }) {
     this.manager = manager;
     this.onClose = onClose;
+    this.onToggleDebugHUD = onToggleDebugHUD;
     this.container = null;
     this.toast = null;
     this.inputs = {};
@@ -37,12 +39,26 @@ export class CalibrationPanel {
       </div>
 
       <div class="calib-body">
-        <!-- Visual Bounding Box Switch -->
+        <!-- Visual Bounding Box & HUD Switches -->
         <div class="calib-section">
           <div class="calib-toggle-row">
             <span>Visual 3D Bounding Box</span>
             <label class="calib-switch">
               <input type="checkbox" id="field_showVisualBounds">
+              <span class="calib-slider-round"></span>
+            </label>
+          </div>
+          <div class="calib-toggle-row" style="margin-top: 8px;">
+            <span>Show Developer Debug HUD</span>
+            <label class="calib-switch">
+              <input type="checkbox" id="field_showDebugHUD">
+              <span class="calib-slider-round"></span>
+            </label>
+          </div>
+          <div class="calib-toggle-row" style="margin-top: 8px;">
+            <span>Device Motion Assist (Gyro)</span>
+            <label class="calib-switch">
+              <input type="checkbox" id="field_enableDeviceMotion">
               <span class="calib-slider-round"></span>
             </label>
           </div>
@@ -91,15 +107,18 @@ export class CalibrationPanel {
           ${this.createSliderRow('Video Start Offset', 'videoStartOffset', 0, 30, 0.2, 's')}
         </div>
 
-        <!-- 5. Tracking Filter Tuning -->
+        <!-- 5. Advanced Tracking & Occlusion Recovery -->
         <div class="calib-section">
           <div class="calib-section-header">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
-            Tracking Filter Tuning
+            Tracking & Occlusion Recovery
           </div>
-          ${this.createSliderRow('Smoothing Factor', 'smoothing', 0.0, 0.98, 0.02, '')}
+          ${this.createSliderRow('Prediction Duration', 'predictionDuration', 100, 2000, 50, 'ms')}
+          ${this.createSliderRow('Lost Target Debounce', 'lostTargetTimeout', 200, 3000, 50, 'ms')}
+          ${this.createSliderRow('Recovery Blend', 'recoveryBlendDuration', 50, 800, 25, 'ms')}
           ${this.createSliderRow('Confidence Cutoff', 'confidenceThreshold', 0.1, 0.95, 0.05, '')}
-          ${this.createSliderRow('Lost Target Debounce', 'lostTargetTimeout', 100, 3000, 50, 'ms')}
+          ${this.createSliderRow('Min Inliers Required', 'minInliers', 3, 15, 1, '')}
+          ${this.createSliderRow('Adaptive Filter Beta', 'filterBeta', 1, 200, 5, '')}
         </div>
 
         <!-- Action Buttons -->
@@ -173,7 +192,9 @@ export class CalibrationPanel {
       'scale', 'scaleX', 'scaleY',
       'rotZ', 'rotX', 'rotY',
       'opacity', 'videoStartOffset',
-      'smoothing', 'confidenceThreshold', 'lostTargetTimeout'
+      'confidenceThreshold', 'lostTargetTimeout',
+      'predictionDuration', 'recoveryBlendDuration',
+      'minInliers', 'filterBeta'
     ];
 
     keys.forEach((key) => {
@@ -181,12 +202,14 @@ export class CalibrationPanel {
       const num = this.container.querySelector(`#num_${key}`);
       const labelVal = this.container.querySelector(`#label_val_${key}`);
 
+      if (!slider || !num) return;
+
       const onValueChange = (val) => {
         val = parseFloat(val);
         slider.value = val;
         num.value = val;
         if (labelVal) {
-          const unit = key.startsWith('pos') ? 'm' : key.startsWith('rot') ? '°' : key === 'lostTargetTimeout' ? 'ms' : key === 'videoStartOffset' ? 's' : key.startsWith('scale') ? 'x' : '';
+          const unit = key.startsWith('pos') ? 'm' : key.startsWith('rot') ? '°' : key.endsWith('Timeout') || key.endsWith('Duration') ? 'ms' : key === 'videoStartOffset' ? 's' : key.startsWith('scale') ? 'x' : '';
           labelVal.textContent = `${val}${unit}`;
         }
         this.emitChange(key, val);
@@ -204,6 +227,21 @@ export class CalibrationPanel {
       this.manager.update({ showVisualBounds: e.target.checked });
     });
 
+    // Debug HUD toggle
+    const hudToggle = this.container.querySelector('#field_showDebugHUD');
+    hudToggle.addEventListener('change', (e) => {
+      this.manager.update({ showDebugHUD: e.target.checked });
+      if (this.onToggleDebugHUD) {
+        this.onToggleDebugHUD(e.target.checked);
+      }
+    });
+
+    // Device motion assist toggle
+    const motionToggle = this.container.querySelector('#field_enableDeviceMotion');
+    motionToggle.addEventListener('change', (e) => {
+      this.manager.update({ enableDeviceMotion: e.target.checked });
+    });
+
     // Close button
     const closeBtn = this.container.querySelector('#calibCloseBtn');
     closeBtn.addEventListener('click', () => {
@@ -215,8 +253,15 @@ export class CalibrationPanel {
     this.container.querySelector('#btnOptimizeTracking').addEventListener('click', () => {
       this.manager.update({
         smoothing: 0.84,
-        confidenceThreshold: 0.45,
-        lostTargetTimeout: 1400,
+        confidenceThreshold: 0.55,
+        lostTargetTimeout: 1200,
+        predictionDuration: 800,
+        recoveryBlendDuration: 250,
+        minInliers: 6,
+        idealInliers: 26,
+        filterMinCF: 0.001,
+        filterBeta: 80.0,
+        enableDeviceMotion: true,
         position: { x: 0, y: 0, z: 0 },
         scale: 1.0,
         scaleX: 1.0,
@@ -300,16 +345,19 @@ export class CalibrationPanel {
       rotZ: s.rotation?.z ?? 0,
       opacity: s.opacity ?? 1.0,
       videoStartOffset: s.videoStartOffset ?? 0,
-      smoothing: s.smoothing ?? 0.8,
-      confidenceThreshold: s.confidenceThreshold ?? 0.6,
-      lostTargetTimeout: s.lostTargetTimeout ?? 1000
+      confidenceThreshold: s.confidenceThreshold ?? 0.55,
+      lostTargetTimeout: s.lostTargetTimeout ?? 1200,
+      predictionDuration: s.predictionDuration ?? 800,
+      recoveryBlendDuration: s.recoveryBlendDuration ?? 250,
+      minInliers: s.minInliers ?? 6,
+      filterBeta: s.filterBeta ?? 80.0
     };
 
     Object.entries(valMap).forEach(([k, v]) => {
       if (this.inputs[k]) {
         this.inputs[k].slider.value = v;
         this.inputs[k].num.value = v;
-        const unit = k.startsWith('pos') ? 'm' : k.startsWith('rot') ? '°' : k === 'lostTargetTimeout' ? 'ms' : k === 'videoStartOffset' ? 's' : k.startsWith('scale') ? 'x' : '';
+        const unit = k.startsWith('pos') ? 'm' : k.startsWith('rot') ? '°' : k.endsWith('Timeout') || k.endsWith('Duration') ? 'ms' : k === 'videoStartOffset' ? 's' : k.startsWith('scale') ? 'x' : '';
         if (this.inputs[k].labelVal) {
           this.inputs[k].labelVal.textContent = `${v}${unit}`;
         }
@@ -319,6 +367,16 @@ export class CalibrationPanel {
     const boundsToggle = this.container.querySelector('#field_showVisualBounds');
     if (boundsToggle) {
       boundsToggle.checked = !!s.showVisualBounds;
+    }
+
+    const hudToggle = this.container.querySelector('#field_showDebugHUD');
+    if (hudToggle) {
+      hudToggle.checked = !!s.showDebugHUD;
+    }
+
+    const motionToggle = this.container.querySelector('#field_enableDeviceMotion');
+    if (motionToggle) {
+      motionToggle.checked = s.enableDeviceMotion !== false;
     }
   }
 

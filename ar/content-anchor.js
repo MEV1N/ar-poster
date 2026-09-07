@@ -7,6 +7,7 @@ import { BoundsVisualizer } from './bounds-visualizer.js';
 /**
  * Content Anchor Container
  * Hosts all AR visual elements anchored to the physical poster and applies calibrated transforms.
+ * Decoupled from MindAR's internal zeroing matrix to allow continuous predictive tracking and smooth transitions.
  */
 export class ContentAnchor {
   constructor({ targetWidth = 1.0, targetHeight = 1.34, videoSrc, fallbacks = [], calibration }) {
@@ -14,13 +15,14 @@ export class ContentAnchor {
     this.targetHeight = targetHeight;
     this.calibration = { ...calibration };
 
-    // Root group attached to MindAR target anchor
+    // Root group attached directly to the main Three.js Scene
     this.rootGroup = new THREE.Group();
     this.rootGroup.name = 'ContentAnchorRoot';
 
     // Calibrated offset container
     this.contentGroup = new THREE.Group();
     this.contentGroup.name = 'CalibratedContentGroup';
+    this.contentGroup.visible = false; // Initially invisible until first tracked
     this.rootGroup.add(this.contentGroup);
 
     // Initialize sub-elements
@@ -45,19 +47,26 @@ export class ContentAnchor {
     });
     this.rootGroup.add(this.boundsVisualizer.group);
 
-    // Smoothing state
-    this.currentPosition = new THREE.Vector3();
-    this.targetPosition = new THREE.Vector3();
-    this.currentQuaternion = new THREE.Quaternion();
-    this.targetQuaternion = new THREE.Quaternion();
-
-    // Lost-target timeout state
+    // Fade and visibility state
+    this.baseOpacity = this.calibration.opacity ?? 1.0;
+    this.currentFade = 0.0;
+    this.targetFade = 0.0;
+    this.fadeSpeed = 4.0; // ~250ms transition
     this.isTracking = false;
-    this.lostTimeoutTimer = null;
-    this.lostTargetTimeout = this.calibration.lostTargetTimeout || 1000;
+    this.trackingState = 'LOST';
+    this.confidence = 0;
 
     // Apply initial calibration parameters
     this.applyCalibration(this.calibration);
+  }
+
+  /**
+   * Set root group 6-DoF pose calculated by TrackingCoordinator
+   */
+  setPose(position, quaternion, scale) {
+    if (position) this.rootGroup.position.copy(position);
+    if (quaternion) this.rootGroup.quaternion.copy(quaternion);
+    if (scale) this.rootGroup.scale.copy(scale);
   }
 
   applyCalibration(calib) {
@@ -71,9 +80,10 @@ export class ContentAnchor {
       rotation = { x: 0, y: 0, z: 0 },
       opacity = 1.0,
       videoStartOffset = 0,
-      lostTargetTimeout = 1000,
       showVisualBounds = false
     } = this.calibration;
+
+    this.baseOpacity = opacity;
 
     // Position offset
     this.contentGroup.position.set(position.x || 0, position.y || 0, position.z || 0);
@@ -91,13 +101,10 @@ export class ContentAnchor {
     this.contentGroup.rotation.set(rx, ry, rz);
 
     // Opacity
-    this.videoPlane.setOpacity(opacity);
+    this.videoPlane.setOpacity(this.baseOpacity * this.currentFade);
 
     // Video start offset
     this.videoPlane.setStartOffset(videoStartOffset);
-
-    // Timeout
-    this.lostTargetTimeout = lostTargetTimeout;
 
     // Visual bounds
     this.boundsVisualizer.setVisible(showVisualBounds);
@@ -111,32 +118,62 @@ export class ContentAnchor {
     );
   }
 
-  onTargetFound() {
-    if (this.lostTimeoutTimer) {
-      clearTimeout(this.lostTimeoutTimer);
-      this.lostTimeoutTimer = null;
+  /**
+   * Handles 5-tier state transitions from TrackingCoordinator
+   */
+  updateTrackingState(state, confidence) {
+    this.trackingState = state;
+    this.confidence = confidence;
+
+    if (state === 'LOCKED' || state === 'GOOD' || state === 'DEGRADED') {
+      this.isTracking = true;
+      this.contentGroup.visible = true;
+      this.targetFade = 1.0;
+      this.videoPlane.play();
+    } else if (state === 'PREDICTING') {
+      // Keep visible and keep video playing during temporary occlusion
+      this.isTracking = true;
+      this.contentGroup.visible = true;
+      this.targetFade = 1.0;
+      this.videoPlane.play();
+    } else if (state === 'LOST') {
+      // Initiate smooth fade out before pausing video
+      this.isTracking = false;
+      this.targetFade = 0.0;
     }
-    this.isTracking = true;
-    this.contentGroup.visible = true;
-    this.videoPlane.play();
+  }
+
+  onTargetFound() {
+    this.updateTrackingState('GOOD', 75);
   }
 
   onTargetLost(onConfirmedLost) {
-    // Graceful timeout debounce before hiding content
-    if (this.lostTimeoutTimer) clearTimeout(this.lostTimeoutTimer);
-
-    this.lostTimeoutTimer = setTimeout(() => {
-      this.isTracking = false;
-      this.contentGroup.visible = false;
-      this.videoPlane.pause();
-      if (onConfirmedLost) {
-        onConfirmedLost();
-      }
-    }, this.lostTargetTimeout);
+    this.updateTrackingState('LOST', 0);
+    if (onConfirmedLost) {
+      setTimeout(onConfirmedLost, 300);
+    }
   }
 
   update(time, delta) {
-    if (!this.isTracking && !this.contentGroup.visible) return;
+    // Smooth opacity fade handling
+    if (this.currentFade !== this.targetFade) {
+      const step = this.fadeSpeed * delta;
+      if (this.currentFade < this.targetFade) {
+        this.currentFade = Math.min(this.targetFade, this.currentFade + step);
+      } else {
+        this.currentFade = Math.max(this.targetFade, this.currentFade - step);
+      }
+
+      this.videoPlane.setOpacity(this.baseOpacity * this.currentFade);
+
+      // Hide content and pause video only after complete fade out
+      if (this.currentFade <= 0.01 && this.targetFade === 0.0) {
+        this.contentGroup.visible = false;
+        this.videoPlane.pause();
+      }
+    }
+
+    if (!this.contentGroup.visible) return;
 
     this.videoPlane.update(time);
     this.holoBorder.update(time);

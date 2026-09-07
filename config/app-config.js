@@ -21,16 +21,8 @@ import defaultCalibration from './default-calibration.json';
  */
 export const TARGETS = [
   {
-    id: 'poster-1',
-    name: 'Poster 1',
-    imageSrc: './poster.png',
-    videoSrc: './video.mp4',
-    aspectRatio: 941 / 1672,
-    fallbackVideos: ['./videos/video.mp4', './video.mp4']
-  },
-  {
     id: 'poster-2',
-    name: 'Poster 2',
+    name: 'Poster 2 (Save the Dates)',
     imageSrc: './poster 2.png',
     videoSrc: './video 2.mp4',
     aspectRatio: 941 / 1672,
@@ -40,6 +32,14 @@ export const TARGETS = [
       './videos/video 2.mp4',
       './videos/video-2.mp4'
     ]
+  },
+  {
+    id: 'poster-1',
+    name: 'Poster 1 (Coming Soon)',
+    imageSrc: './poster.png',
+    videoSrc: './video.mp4',
+    aspectRatio: 941 / 1672,
+    fallbackVideos: ['./videos/video.mp4', './video.mp4']
   }
 ];
 
@@ -50,12 +50,12 @@ export const APP_CONFIG = {
   // Configured posters and their associated AR videos
   targets: TARGETS,
 
-  // Default target fallback
+  // Default target fallback (Poster 2)
   target: TARGETS[0],
 
-  // Primary video fallback
+  // Primary video fallback (Video 2)
   video: {
-    src: './video.mp4',
+    src: './video 2.mp4',
     loop: true,
     preload: 'auto',
     playsInline: true
