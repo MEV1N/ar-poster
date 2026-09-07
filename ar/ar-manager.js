@@ -40,20 +40,18 @@ export class ARManager {
     this.camera = null;
     this.renderer = null;
 
-    // Multi-target items array: { index, def, anchor, contentAnchor, lastState }
+    // Multi-target items array
     this.targetItems = [];
     this.activeTrackingIndices = new Set();
-    this.lastTrackerResults = {};
 
     // Initialize Tracking Coordinator
     this.trackingCoordinator = new TrackingCoordinator({
       minInliers: this.calibration.minInliers || 6,
-      idealInliers: this.calibration.idealInliers || 26,
-      confidenceThreshold: Math.round((this.calibration.confidenceThreshold || 0.6) * 100),
+      idealInliers: this.calibration.idealInliers || 24,
+      confidenceThreshold: Math.round((this.calibration.confidenceThreshold || 0.55) * 100),
       predictionDuration: this.calibration.predictionDuration || 800,
       lostTargetTimeout: this.calibration.lostTargetTimeout || 1200,
       recoveryBlendDuration: this.calibration.recoveryBlendDuration || 250,
-      filterMinCF: this.calibration.filterMinCF || 0.001,
       filterBeta: this.calibration.filterBeta || 80.0,
       enableDeviceMotion: this.calibration.enableDeviceMotion !== false
     });
@@ -87,10 +85,10 @@ export class ARManager {
     this.mindarThree = new MindARThreeClass({
       container: this.container,
       imageTargetSrc: this.imageTargetSrc,
-      filterMinCF: 0.00001, // Low internal filter; our OneEuro handles fine adaptive smoothing
-      filterBeta: 0.0001,
+      filterMinCF: this.calibration.filterMinCF || 0.0001,
+      filterBeta: this.calibration.filterBeta || 0.001,
       warmupTolerance: this.calibration.warmupTolerance || 2,
-      missTolerance: 12, // Let our TrackingCoordinator manage debouncing and predicting
+      missTolerance: this.calibration.missTolerance || 8,
       uiLoading: 'no',
       uiScanning: 'no'
     });
@@ -130,14 +128,55 @@ export class ARManager {
         calibration: this.calibration
       });
 
-      // Attach directly to scene so MindAR's internal zero-matrix does not collapse our visual anchor
-      this.scene.add(contentAnchor.rootGroup);
+      // Attach contentAnchor directly to anchor.group so Three.js coordinates match physical poster perfectly
+      anchor.group.add(contentAnchor.rootGroup);
+
+      // Tracking state callbacks for target i
+      anchor.onTargetFound = () => {
+        // Mutual exclusion: pause any other active target's video to prevent audio clash
+        if (this.primaryActiveIndex !== i) {
+          this.primaryActiveIndex = i;
+          this.targetItems.forEach((otherItem, otherIdx) => {
+            if (otherIdx !== i) {
+              otherItem.contentAnchor.videoPlane.pause();
+            }
+          });
+        }
+
+        contentAnchor.onTargetFound();
+        this.activeTrackingIndices.add(i);
+
+        if (this.onTrackingStateChange) {
+          this.onTrackingStateChange('tracking', targetDef);
+        }
+
+        if (!this.hasTrackedOnce) {
+          this.hasTrackedOnce = true;
+          if (this.onFirstTrack) {
+            this.onFirstTrack(targetDef);
+          }
+        }
+      };
+
+      anchor.onTargetLost = () => {
+        contentAnchor.onTargetLost(() => {
+          this.activeTrackingIndices.delete(i);
+          if (this.primaryActiveIndex === i) {
+            this.primaryActiveIndex = -1;
+          }
+          if (this.activeTrackingIndices.size === 0 && this.onTrackingStateChange) {
+            this.onTrackingStateChange('lost', targetDef);
+          }
+        });
+      };
 
       this.targetItems.push({
         index: i,
         def: targetDef,
         anchor,
         contentAnchor,
+        lastValidMatrix: new THREE.Matrix4(),
+        lastSeenTime: 0,
         lastState: 'LOST'
       });
     }
@@ -147,51 +186,12 @@ export class ARManager {
       this.anchor = this.targetItems[0].anchor;
       this.contentAnchor = this.targetItems[0].contentAnchor;
     }
-
-    // Hook MindAR controller tracker for telemetry extraction
-    this.hookTrackerTelemetry();
-  }
-
-  hookTrackerTelemetry() {
-    if (!this.mindarThree || !this.mindarThree.controller) return;
-    const controller = this.mindarThree.controller;
-
-    // Intercept controller.tracker.track if present
-    if (controller.tracker && typeof controller.tracker.track === 'function') {
-      const originalTrack = controller.tracker.track.bind(controller.tracker);
-      controller.tracker.track = (inputImage, targetIndex) => {
-        const result = originalTrack(inputImage, targetIndex);
-        if (result && result.worldCoords) {
-          const inlierCount = result.worldCoords.length / 3;
-          const points = [];
-          if (result.screenCoords) {
-            for (let p = 0; p < result.screenCoords.length; p += 2) {
-              points.push({
-                x: result.screenCoords[p],
-                y: result.screenCoords[p + 1],
-                cx: 0.5,
-                cy: 0.5
-              });
-            }
-          }
-          this.lastTrackerResults[targetIndex] = {
-            inliers: inlierCount,
-            points,
-            timestamp: performance.now()
-          };
-        }
-        return result;
-      };
-    }
   }
 
   async start() {
     if (this.isRunning) return;
     await this.mindarThree.start();
     this.isRunning = true;
-
-    // Retry hooking tracker if controller was initialized asynchronously during start
-    this.hookTrackerTelemetry();
 
     // Ensure full-screen aspect fill calculation on mobile devices
     const handleResize = () => {
@@ -215,7 +215,7 @@ export class ARManager {
       setTimeout(handleResize, 1200);
     }
 
-    // Start enhanced render loop with TrackingCoordinator
+    // Start render loop with TrackingCoordinator & occlusion hold
     this.renderer.setAnimationLoop(() => {
       const delta = this.clock.getDelta();
       const time = this.clock.getElapsedTime();
@@ -223,95 +223,62 @@ export class ARManager {
 
       for (let i = 0; i < this.targetItems.length; i++) {
         const item = this.targetItems[i];
-        const mindarAnchor = item.anchor;
-        const group = mindarAnchor.group;
+        const group = item.anchor.group;
+        const targetDef = item.def;
 
-        // Check if MindAR has a valid non-zero tracking matrix this frame
-        let isVisuallyTracked = false;
-        let rawMatrix = null;
+        // Check if MindAR actively tracks this frame
+        // (MindAR's inactive invisibleMatrix has elements[0, 5, 10] = 0)
+        const isVisuallyTracked = group.visible && group.matrix && (
+          group.matrix.elements[0] !== 0 ||
+          group.matrix.elements[5] !== 0 ||
+          group.matrix.elements[10] !== 0
+        );
 
-        if (group && group.visible && group.matrix && group.matrix.elements[15] !== 0) {
-          // MindAR's invisibleMatrix sets elements[0..15] = 0
-          // If elements[15] is non-zero, MindAR produced a valid pose
-          isVisuallyTracked = true;
-          rawMatrix = group.matrix;
+        let activeMatrix = null;
+
+        if (isVisuallyTracked) {
+          item.lastValidMatrix.copy(group.matrix);
+          item.lastSeenTime = nowMs;
+          activeMatrix = group.matrix;
+        } else {
+          const missedMs = item.lastSeenTime ? (nowMs - item.lastSeenTime) : Infinity;
+          const lostTimeout = this.calibration.lostTargetTimeout || 1200;
+
+          // OCCLUSION RESISTANCE: Keep anchor.group visible and hold last known matrix
+          if (item.contentAnchor.isTracking && missedMs <= lostTimeout) {
+            group.visible = true;
+            group.matrix.copy(item.lastValidMatrix);
+            activeMatrix = item.lastValidMatrix;
+          }
         }
 
-        // Retrieve tracker telemetry
-        const trackerTelemetry = this.lastTrackerResults[i] || {};
-        const isTelemetryFresh = trackerTelemetry.timestamp && (nowMs - trackerTelemetry.timestamp < 100);
-
+        // Process telemetry through TrackingCoordinator
         const telemetry = {
           isTracking: isVisuallyTracked,
-          inliers: isTelemetryFresh ? trackerTelemetry.inliers : (isVisuallyTracked ? 18 : 0),
-          points: isTelemetryFresh ? trackerTelemetry.points : []
+          inliers: isVisuallyTracked ? 24 : 0
         };
 
-        // Run TrackingCoordinator 5-tier state machine & filter
-        const result = this.trackingCoordinator.processFrame(i, isVisuallyTracked ? rawMatrix : null, telemetry, delta, nowMs);
+        const result = this.trackingCoordinator.processFrame(i, activeMatrix, telemetry, delta, nowMs);
 
-        // Update ContentAnchor 3D pose
-        item.contentAnchor.setPose(result.position, result.quaternion, result.scale);
-        item.contentAnchor.updateTrackingState(result.state, result.confidence);
+        // Update content anchor (handles video and animations)
         item.contentAnchor.update(time, delta);
 
-        // Notify state transitions
+        // State change notification
         if (result.state !== item.lastState) {
           item.lastState = result.state;
-          this.handleStateChange(item, result.state, result.stats);
+          if (result.state === 'PREDICTING' && this.onTrackingStateChange) {
+            this.onTrackingStateChange('predicting', targetDef, result.stats);
+          }
         }
 
         // Telemetry update callback for Debug HUD
         if (this.onTelemetryUpdate && (result.state !== 'LOST' || i === 0)) {
-          this.onTelemetryUpdate(item.def, result.stats, result.confidence);
+          this.onTelemetryUpdate(targetDef, result.stats, result.confidence);
         }
       }
 
       this.renderer.render(this.scene, this.camera);
     });
-  }
-
-  handleStateChange(item, newState, stats) {
-    const i = item.index;
-
-    if (newState === 'LOCKED' || newState === 'GOOD' || newState === 'DEGRADED') {
-      this.activeTrackingIndices.add(i);
-
-      // Mutual exclusion: pause any other active target's video to prevent audio clash
-      if (this.primaryActiveIndex !== i) {
-        this.primaryActiveIndex = i;
-        this.targetItems.forEach((otherItem, otherIdx) => {
-          if (otherIdx !== i) {
-            otherItem.contentAnchor.videoPlane.pause();
-          }
-        });
-      }
-
-      if (this.onTrackingStateChange) {
-        this.onTrackingStateChange('tracking', item.def, stats);
-      }
-
-      if (!this.hasTrackedOnce) {
-        this.hasTrackedOnce = true;
-        if (this.onFirstTrack) {
-          this.onFirstTrack(item.def);
-        }
-      }
-    } else if (newState === 'PREDICTING') {
-      // In predicting state, maintain current tracking status and prompt silence
-      if (this.onTrackingStateChange) {
-        this.onTrackingStateChange('predicting', item.def, stats);
-      }
-    } else if (newState === 'LOST') {
-      this.activeTrackingIndices.delete(i);
-      if (this.primaryActiveIndex === i) {
-        this.primaryActiveIndex = -1;
-      }
-
-      if (this.activeTrackingIndices.size === 0 && this.onTrackingStateChange) {
-        this.onTrackingStateChange('lost', item.def, stats);
-      }
-    }
   }
 
   stop() {
@@ -341,11 +308,10 @@ export class ARManager {
     this.trackingCoordinator.updateConfig({
       minInliers: this.calibration.minInliers,
       idealInliers: this.calibration.idealInliers,
-      confidenceThreshold: Math.round((this.calibration.confidenceThreshold || 0.6) * 100),
+      confidenceThreshold: Math.round((this.calibration.confidenceThreshold || 0.55) * 100),
       predictionDuration: this.calibration.predictionDuration,
       lostTargetTimeout: this.calibration.lostTargetTimeout,
       recoveryBlendDuration: this.calibration.recoveryBlendDuration,
-      filterMinCF: this.calibration.filterMinCF,
       filterBeta: this.calibration.filterBeta,
       enableDeviceMotion: this.calibration.enableDeviceMotion !== false
     });
