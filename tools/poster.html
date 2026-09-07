@@ -269,10 +269,23 @@
     </div>
   </header>
 
+  <div style="width: 100%; max-width: 900px; margin-bottom: 16px; display: flex; gap: 8px; flex-wrap: wrap;">
+    <button class="btn btn-tab active" data-src="/poster.png" data-name="Poster 1" data-video="Video 1">Poster 1</button>
+    <button class="btn btn-tab" data-src="/poster 2.png" data-name="Poster 2" data-video="Video 2">Poster 2</button>
+    <button class="btn btn-tab" data-src="/poster 3.png" data-name="Poster 3" data-video="Video 3">Poster 3</button>
+    <button class="btn btn-tab" data-src="/poster 4.png" data-name="Poster 4" data-video="Video 4">Poster 4</button>
+    <button class="btn btn-tab" data-src="/poster 5.png" data-name="Poster 5" data-video="Video 5">Poster 5</button>
+  </div>
+
   <main class="layout">
     <!-- Physical Poster Display -->
-    <div class="poster-frame">
-      <img src="poster.png" alt="Event Poster Image Target" id="posterImg">
+    <div>
+      <div class="poster-frame">
+        <img src="/poster.png" alt="Event Poster Image Target" id="posterImg">
+      </div>
+      <div style="text-align: center; margin-top: 8px; font-size: 0.9rem; color: var(--cyan);" id="posterLabel">
+        Displaying: Poster 1 (Shows Video 1 in AR)
+      </div>
     </div>
 
     <!-- Quick Scan & Instructions Sidebar -->
@@ -298,28 +311,37 @@
         <ol class="instructions">
           <li>
             <span class="step-num">1</span>
-            <span>Leave this poster displayed on this screen or print it on paper.</span>
+            <span>Switch between Poster 1, 2, 3, 4, or 5 using the tabs above.</span>
           </li>
           <li>
             <span class="step-num">2</span>
-            <span>Scan the QR code with your mobile phone (iPhone Safari or Android Chrome).</span>
+            <span>Scan the QR code with your mobile phone or open the WebAR camera on this device.</span>
           </li>
           <li>
             <span class="step-num">3</span>
-            <span>Allow rear camera permission and point your phone at this poster.</span>
+            <span>Aim your camera at the active poster on screen.</span>
           </li>
           <li>
             <span class="step-num">4</span>
-            <span>Watch the AR video, holograms, and dynamic audio lock onto the poster!</span>
+            <span>The corresponding video will seamlessly overlay on that poster only!</span>
           </li>
         </ol>
-        <div class="notice">
-          Anchor: Optical Keypoint Descriptor<br>
-          Target: /assets/event-poster.jpg
+        <div class="notice" id="targetNotice">
+          Active Target: Poster 1<br>
+          Connected Video: video.mp4
         </div>
       </div>
     </div>
   </main>
+
+  <style>
+    .btn-tab.active {
+      background: rgba(0, 240, 255, 0.25);
+      border-color: var(--cyan);
+      color: #fff;
+      box-shadow: 0 0 12px rgba(0, 240, 255, 0.4);
+    }
+  </style>
 
   <script>
     // Update host notice with current page URL
@@ -328,6 +350,25 @@
     if (hostNotice) {
       hostNotice.textContent = arUrl;
     }
+
+    // Tab switcher
+    const tabs = document.querySelectorAll('.btn-tab');
+    const posterImg = document.getElementById('posterImg');
+    const posterLabel = document.getElementById('posterLabel');
+    const targetNotice = document.getElementById('targetNotice');
+
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        tabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        const src = tab.getAttribute('data-src');
+        const name = tab.getAttribute('data-name');
+        const video = tab.getAttribute('data-video');
+        posterImg.src = src;
+        posterLabel.textContent = `Displaying: ${name} (Shows ${video} in AR)`;
+        targetNotice.innerHTML = `Active Target: ${name}<br>Connected Video: ${video.toLowerCase().replace(' ', '')}.mp4`;
+      });
+    });
   </script>
 </body>
 </html>

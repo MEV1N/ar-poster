@@ -21,8 +21,19 @@ import defaultCalibration from './default-calibration.json';
  */
 export const TARGETS = [
   {
+    id: 'poster-1',
+    name: 'Poster 1',
+    imageSrc: './poster.png',
+    videoSrc: './video.mp4',
+    aspectRatio: 941 / 1672,
+    fallbackVideos: [
+      './videos/video.mp4',
+      './video.mp4'
+    ]
+  },
+  {
     id: 'poster-2',
-    name: 'Poster 2 (Save the Dates)',
+    name: 'Poster 2',
     imageSrc: './poster 2.png',
     videoSrc: './video 2.mp4',
     aspectRatio: 941 / 1672,
@@ -34,12 +45,43 @@ export const TARGETS = [
     ]
   },
   {
-    id: 'poster-1',
-    name: 'Poster 1 (Coming Soon)',
-    imageSrc: './poster.png',
-    videoSrc: './video.mp4',
+    id: 'poster-3',
+    name: 'Poster 3',
+    imageSrc: './poster 3.png',
+    videoSrc: './video 3.mp4',
     aspectRatio: 941 / 1672,
-    fallbackVideos: ['./videos/video.mp4', './video.mp4']
+    fallbackVideos: [
+      './video-3.mp4',
+      './video3.mp4',
+      './videos/video 3.mp4',
+      './videos/video-3.mp4'
+    ]
+  },
+  {
+    id: 'poster-4',
+    name: 'Poster 4',
+    imageSrc: './poster 4.png',
+    videoSrc: './video 4.mp4',
+    aspectRatio: 941 / 1672,
+    fallbackVideos: [
+      './video-4.mp4',
+      './video4.mp4',
+      './videos/video 4.mp4',
+      './videos/video-4.mp4'
+    ]
+  },
+  {
+    id: 'poster-5',
+    name: 'Poster 5',
+    imageSrc: './poster 5.png',
+    videoSrc: './video 5.mp4',
+    aspectRatio: 941 / 1672,
+    fallbackVideos: [
+      './video-5.mp4',
+      './video5.mp4',
+      './videos/video 5.mp4',
+      './videos/video-5.mp4'
+    ]
   }
 ];
 
@@ -50,12 +92,12 @@ export const APP_CONFIG = {
   // Configured posters and their associated AR videos
   targets: TARGETS,
 
-  // Default target fallback (Poster 2)
+  // Default target fallback (Poster 1)
   target: TARGETS[0],
 
-  // Primary video fallback (Video 2)
+  // Primary video fallback (Video 1)
   video: {
-    src: './video 2.mp4',
+    src: './video.mp4',
     loop: true,
     preload: 'auto',
     playsInline: true

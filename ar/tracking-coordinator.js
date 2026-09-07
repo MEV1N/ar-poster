@@ -385,6 +385,31 @@ export class TrackingCoordinator {
     return Math.min(100, Math.max(0, rawScore));
   }
 
+  reset(targetIndex) {
+    if (typeof targetIndex === 'number') {
+      this.resetTarget(targetIndex);
+    } else {
+      for (const key of this.targets.keys()) {
+        this.resetTarget(key);
+      }
+    }
+  }
+
+  resetTarget(targetIndex) {
+    if (this.targets.has(targetIndex)) {
+      const t = this.targets.get(targetIndex);
+      t.state = 'LOST';
+      t.confidence = 0;
+      t.historicalConfidence = 0;
+      t.consecutiveHits = 0;
+      t.consecutiveMisses = 999;
+      t.lastVisualTime = 0;
+      t.predictStartTime = 0;
+      t.isPredicting = false;
+      t.isHoldingPose = false;
+    }
+  }
+
   destroy() {
     this.motionFusion.destroy();
     this.targets.clear();

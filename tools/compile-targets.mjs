@@ -38,6 +38,7 @@ async function compileAllTargets() {
   const tempDir = path.join(process.env.TEMP || 'C:\\Windows\\Temp', 'ar-compiler-' + Date.now());
 
   const browserArgs = [
+    '--headless=new',
     `--remote-debugging-port=${port}`,
     `--user-data-dir=${tempDir}`,
     '--no-first-run',
@@ -91,10 +92,10 @@ async function compileAllTargets() {
     }
   };
 
-  console.log('Extracting feature descriptors and generating .mind files...');
+  console.log('Extracting feature descriptors and generating .mind files (Posters 1 to 5)...');
   let completed = false;
 
-  for (let i = 0; i < 120; i++) {
+  for (let i = 0; i < 240; i++) {
     await new Promise(r => setTimeout(r, 1000));
     id++;
     const checkId = id;

@@ -143,6 +143,20 @@ export class ContentAnchor {
     }, this.lostTargetTimeout);
   }
 
+  forceHideAndPause() {
+    if (this.lostTimeoutTimer) {
+      clearTimeout(this.lostTimeoutTimer);
+      this.lostTimeoutTimer = null;
+    }
+    this.isTracking = false;
+    this.trackingState = 'LOST';
+    this.targetFade = 0.0;
+    this.currentFade = 0.0;
+    this.contentGroup.visible = false;
+    this.videoPlane.setOpacity(0.0);
+    this.videoPlane.pause();
+  }
+
   update(time, delta) {
     // Smooth opacity fade handling
     if (this.currentFade !== this.targetFade) {

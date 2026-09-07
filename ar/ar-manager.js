@@ -136,16 +136,19 @@ export class ARManager {
 
       // Tracking state callbacks for target i
       anchor.onTargetFound = () => {
-        // Mutual exclusion: pause any other active target's video to prevent audio clash
-        if (this.primaryActiveIndex !== i) {
-          this.primaryActiveIndex = i;
-          this.targetItems.forEach((otherItem, otherIdx) => {
-            if (otherIdx !== i) {
-              otherItem.contentAnchor.videoPlane.pause();
-            }
-          });
-        }
+        // Mutual exclusion: when target i is found, immediately suppress all other targets
+        this.primaryActiveIndex = i;
+        this.targetItems.forEach((otherItem, otherIdx) => {
+          if (otherIdx !== i) {
+            otherItem.contentAnchor.forceHideAndPause();
+            otherItem.anchor.group.visible = false;
+            otherItem.lastState = 'LOST';
+            this.trackingCoordinator.resetTarget(otherIdx);
+            this.activeTrackingIndices.delete(otherIdx);
+          }
+        });
 
+        contentAnchor.rootGroup.visible = true;
         contentAnchor.onTargetFound();
         this.activeTrackingIndices.add(i);
 
@@ -246,6 +249,43 @@ export class ARManager {
         if (isVisuallyTracked) {
           item.lastValidMatrix.copy(group.matrix);
           item.lastSeenTime = nowMs;
+
+          // If this target is visually tracked but another target was primary, check if old primary is still tracked
+          if (this.primaryActiveIndex !== i) {
+            let oldPrimaryTracked = false;
+            if (this.primaryActiveIndex >= 0 && this.primaryActiveIndex < this.targetItems.length) {
+              const oldGroup = this.targetItems[this.primaryActiveIndex].anchor.group;
+              oldPrimaryTracked = oldGroup.visible && oldGroup.matrix && (
+                oldGroup.matrix.elements[0] !== 0 ||
+                oldGroup.matrix.elements[5] !== 0 ||
+                oldGroup.matrix.elements[10] !== 0
+              );
+            }
+            if (!oldPrimaryTracked) {
+              this.primaryActiveIndex = i;
+              this.targetItems.forEach((otherItem, otherIdx) => {
+                if (otherIdx !== i) {
+                  otherItem.contentAnchor.forceHideAndPause();
+                  otherItem.anchor.group.visible = false;
+                  otherItem.lastState = 'LOST';
+                  this.trackingCoordinator.resetTarget(otherIdx);
+                  this.activeTrackingIndices.delete(otherIdx);
+                }
+              });
+              item.contentAnchor.onTargetFound();
+              this.activeTrackingIndices.add(i);
+            }
+          }
+        }
+
+        // Mutual exclusion: if another target is active, strictly hide this one and pause
+        if (this.primaryActiveIndex !== -1 && this.primaryActiveIndex !== i) {
+          group.visible = false;
+          item.contentAnchor.contentGroup.visible = false;
+          if (item.contentAnchor.videoPlane && !item.contentAnchor.videoPlane.isPaused) {
+            item.contentAnchor.videoPlane.pause();
+          }
+          continue;
         }
 
         // Process frame with pose fusion through TrackingCoordinator

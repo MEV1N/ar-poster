@@ -405,15 +405,12 @@
       </div>
 
       <div class="btn-group" style="display: flex; flex-direction: column; gap: 8px;">
-        <div style="display: flex; gap: 8px;">
-          <button id="loadPoster1Btn" class="btn btn-secondary" style="flex: 1;">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2v9.67z"/></svg>
-            Poster 1
-          </button>
-          <button id="loadPoster2Btn" class="btn btn-secondary" style="flex: 1;">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2v9.67z"/></svg>
-            Poster 2
-          </button>
+        <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px;">
+          <button id="loadPoster1Btn" class="btn btn-secondary" style="padding: 8px 4px; font-size: 0.8rem;">P1</button>
+          <button id="loadPoster2Btn" class="btn btn-secondary" style="padding: 8px 4px; font-size: 0.8rem;">P2</button>
+          <button id="loadPoster3Btn" class="btn btn-secondary" style="padding: 8px 4px; font-size: 0.8rem;">P3</button>
+          <button id="loadPoster4Btn" class="btn btn-secondary" style="padding: 8px 4px; font-size: 0.8rem;">P4</button>
+          <button id="loadPoster5Btn" class="btn btn-secondary" style="padding: 8px 4px; font-size: 0.8rem;">P5</button>
         </div>
 
         <button id="compileBtn" class="btn btn-primary" disabled>
@@ -423,7 +420,7 @@
 
         <button id="compileBothBtn" class="btn btn-secondary" style="background: rgba(0, 240, 255, 0.15); border-color: var(--cyan); color: #fff;">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H8V4h12v12z"/></svg>
-          Compile Both (Multi-Target: Poster 1 + 2)
+          Compile All 5 Posters (Multi-Target: targets.mind)
         </button>
 
         <button id="downloadBtn" class="btn btn-accent" disabled>
@@ -502,6 +499,9 @@
     const fileInput = document.getElementById('fileInput');
     const loadPoster1Btn = document.getElementById('loadPoster1Btn');
     const loadPoster2Btn = document.getElementById('loadPoster2Btn');
+    const loadPoster3Btn = document.getElementById('loadPoster3Btn');
+    const loadPoster4Btn = document.getElementById('loadPoster4Btn');
+    const loadPoster5Btn = document.getElementById('loadPoster5Btn');
     const compileBtn = document.getElementById('compileBtn');
     const compileBothBtn = document.getElementById('compileBothBtn');
     const downloadBtn = document.getElementById('downloadBtn');
@@ -577,9 +577,33 @@
       loadPosterBySrc('/poster 2.png', 'poster 2.png');
     });
 
+    loadPoster3Btn.addEventListener('click', () => {
+      currentImgName = 'poster 3.png';
+      lastCompiledName = 'poster-3.mind';
+      loadPosterBySrc('/poster 3.png', 'poster 3.png');
+    });
+
+    loadPoster4Btn.addEventListener('click', () => {
+      currentImgName = 'poster 4.png';
+      lastCompiledName = 'poster-4.mind';
+      loadPosterBySrc('/poster 4.png', 'poster 4.png');
+    });
+
+    loadPoster5Btn.addEventListener('click', () => {
+      currentImgName = 'poster 5.png';
+      lastCompiledName = 'poster-5.mind';
+      loadPosterBySrc('/poster 5.png', 'poster 5.png');
+    });
+
     function handleFile(file) {
       currentImgName = file.name;
-      if (file.name.includes('2')) {
+      if (file.name.includes('5')) {
+        lastCompiledName = 'poster-5.mind';
+      } else if (file.name.includes('4')) {
+        lastCompiledName = 'poster-4.mind';
+      } else if (file.name.includes('3')) {
+        lastCompiledName = 'poster-3.mind';
+      } else if (file.name.includes('2')) {
         lastCompiledName = 'poster-2.mind';
       } else {
         lastCompiledName = 'poster.mind';
@@ -795,8 +819,8 @@
       progressContainer.style.display = 'block';
       progressBar.style.width = '0%';
       progressPercent.textContent = '0%';
-      progressStatus.textContent = 'Loading Poster 2 & Poster 1...';
-      log('Starting Multi-Target compilation (Target 0: Poster 2, Target 1: Poster 1)...', true);
+      progressStatus.textContent = 'Loading Posters 1 to 5...';
+      log('Starting Multi-Target compilation (5 Targets: Poster 1, Poster 2, Poster 3, Poster 4, Poster 5)...', true);
 
       try {
         const loadImg = (src) => new Promise((resolve, reject) => {
@@ -807,31 +831,39 @@
           img.src = src;
         });
 
-        // Put poster 2 at index 0 so Poster 2 is prioritized as primary
-        const [imgPoster2, imgPoster1] = await Promise.all([
+        // Exact index order corresponding to TARGETS in config/app-config.js
+        // Index 0: Poster 1
+        // Index 1: Poster 2
+        // Index 2: Poster 3
+        // Index 3: Poster 4
+        // Index 4: Poster 5
+        const [imgP1, imgP2, imgP3, imgP4, imgP5] = await Promise.all([
+          loadImg('/poster.png'),
           loadImg('/poster 2.png'),
-          loadImg('/poster.png')
+          loadImg('/poster 3.png'),
+          loadImg('/poster 4.png'),
+          loadImg('/poster 5.png')
         ]);
 
-        log('Loaded both images. Compiling target 0 (poster 2) and target 1 (poster 1)...');
+        log('Loaded all 5 poster images. Compiling multi-target binary (Posters 1 to 5)...');
         compilerInstance = new Compiler();
-        await compilerInstance.compileImageTargets([imgPoster2, imgPoster1], (percent) => {
+        await compilerInstance.compileImageTargets([imgP1, imgP2, imgP3, imgP4, imgP5], (percent) => {
           const p = Math.min(100, Math.round(percent));
           progressBar.style.width = `${p}%`;
           progressPercent.textContent = `${p}%`;
-          progressStatus.textContent = `Compiling multi-target (${p}%)`;
+          progressStatus.textContent = `Compiling 5 posters (${p}%)`;
         });
 
         compiledBuffer = await compilerInstance.exportData();
         const byteSize = compiledBuffer.byteLength;
-        statSize.textContent = `${(byteSize / 1024).toFixed(1)} KB (Multi-Target)`;
-        statPoints.textContent = '2 Targets compiled';
-        statQuality.innerHTML = '<span class="badge success">★★★★★ Multi-Target Ready</span>';
-        progressStatus.textContent = 'Multi-target compiled successfully!';
+        statSize.textContent = `${(byteSize / 1024).toFixed(1)} KB (5-Target)`;
+        statPoints.textContent = '5 Targets compiled';
+        statQuality.innerHTML = '<span class="badge success">★★★★★ 5-Target AR Ready</span>';
+        progressStatus.textContent = '5-Target binary compiled successfully!';
         lastCompiledName = 'targets.mind';
         downloadBtn.disabled = false;
 
-        log(`Multi-target compiled (${(byteSize / 1024).toFixed(1)} KB)! Saving to targets.mind...`, true);
+        log(`All 5 targets compiled (${(byteSize / 1024).toFixed(1)} KB)! Saving to targets.mind...`, true);
         await saveMindToServer('targets.mind', compiledBuffer);
         await saveMindToServer('poster-all.mind', compiledBuffer);
       } catch (err) {
@@ -859,20 +891,6 @@
     });
 
     // Expose helpers globally
-    window.__compilePoster2 = async function() {
-      loadPoster2Btn.click();
-      await new Promise(r => setTimeout(r, 600));
-      compileBtn.click();
-      return new Promise((resolve) => {
-        const check = setInterval(() => {
-          if (compiledBuffer && lastCompiledName.includes('2')) {
-            clearInterval(check);
-            resolve(compiledBuffer);
-          }
-        }, 500);
-      });
-    };
-
     window.__compileMulti = async function() {
       compileBothBtn.click();
       return new Promise((resolve) => {
@@ -886,11 +904,9 @@
     };
 
     window.__compileAllBothAndSingle = async function() {
-      log('Starting automated full compilation batch...');
-      await window.__compilePoster2();
-      await new Promise(r => setTimeout(r, 1000));
+      log('Starting automated 5-poster compilation batch...');
       await window.__compileMulti();
-      log('All targets compiled and saved successfully!');
+      log('All 5 targets compiled and saved successfully to targets.mind!');
       window.__batchDone = true;
       return true;
     };
@@ -898,12 +914,8 @@
     // Auto-execute if query param present
     window.addEventListener('DOMContentLoaded', async () => {
       const params = new URLSearchParams(window.location.search);
-      if (params.get('auto') === 'all') {
+      if (params.get('auto') === 'all' || params.get('auto') === 'multi') {
         setTimeout(() => window.__compileAllBothAndSingle(), 500);
-      } else if (params.get('auto') === 'poster2') {
-        setTimeout(() => window.__compilePoster2(), 500);
-      } else if (params.get('auto') === 'multi') {
-        setTimeout(() => window.__compileMulti(), 500);
       } else {
         loadPoster1Btn.click();
       }
