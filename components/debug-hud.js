@@ -3,7 +3,7 @@ import './debug-hud.css';
 /**
  * Developer Tracking Debug HUD
  * Real-time floating telemetry overlay showing target name, 5-tier tracking state,
- * confidence score bar, inlier count, quadrant distribution, prediction status, and FPS.
+ * confidence score bar, inlier count, quadrant distribution, prediction status, motion fusion state, and FPS.
  */
 export class DebugHUD {
   constructor({ onOpenCalibration } = {}) {
@@ -26,6 +26,7 @@ export class DebugHUD {
     this.elQuadrants = null;
     this.elSpan = null;
     this.elDelta = null;
+    this.elMotion = null;
     this.elPrediction = null;
     this.elFps = null;
 
@@ -90,6 +91,11 @@ export class DebugHUD {
         </div>
 
         <div class="hud-row">
+          <span class="hud-label">Motion Fusion</span>
+          <span class="hud-val" id="hudMotion" style="color: #a0a5c0;">Standby</span>
+        </div>
+
+        <div class="hud-row">
           <span class="hud-label">Prediction Status</span>
           <span class="hud-val" id="hudPrediction">Idle</span>
         </div>
@@ -97,10 +103,6 @@ export class DebugHUD {
         <div class="hud-row">
           <span class="hud-label">Render Performance</span>
           <span class="hud-val" id="hudFps">60 FPS</span>
-        </div>
-
-        <div class="hud-footer-actions">
-          <button class="hud-btn-action" id="hudCalibBtn">Calibration Studio</button>
         </div>
       </div>
     `;
@@ -116,6 +118,7 @@ export class DebugHUD {
     this.elQuadrants = this.container.querySelector('#hudQuadrants');
     this.elSpan = this.container.querySelector('#hudSpan');
     this.elDelta = this.container.querySelector('#hudDelta');
+    this.elMotion = this.container.querySelector('#hudMotion');
     this.elPrediction = this.container.querySelector('#hudPrediction');
     this.elFps = this.container.querySelector('#hudFps');
 
@@ -135,11 +138,6 @@ export class DebugHUD {
     const header = this.container.querySelector('#hudHeader');
     header.addEventListener('click', () => {
       if (this.isMinimized) this.toggleMinimize();
-    });
-
-    const calibBtn = this.container.querySelector('#hudCalibBtn');
-    calibBtn.addEventListener('click', () => {
-      if (this.onOpenCalibration) this.onOpenCalibration();
     });
   }
 
@@ -214,6 +212,16 @@ export class DebugHUD {
 
     if (this.elDelta) {
       this.elDelta.textContent = `${stats.poseDelta || 0}m`;
+    }
+
+    if (this.elMotion) {
+      if (stats.motionActive) {
+        this.elMotion.textContent = 'Active (6-DoF Fusion)';
+        this.elMotion.style.color = '#00f0ff';
+      } else {
+        this.elMotion.textContent = 'Standby (Visual Only)';
+        this.elMotion.style.color = '#a0a5c0';
+      }
     }
 
     if (this.elPrediction) {

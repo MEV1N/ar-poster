@@ -53,11 +53,15 @@ class SimpleWebARApp {
       this.startCamera();
     });
 
-    // Tap anywhere on screen to unmute / toggle audio
+    // Tap anywhere on screen to unmute / toggle audio and request motion sensor permission
     window.addEventListener('click', (e) => {
       // Ignore clicks on debug HUD if active
       if (e.target.closest('#debugHUD')) {
         return;
+      }
+
+      if (this.arManager?.trackingCoordinator?.motionFusion) {
+        this.arManager.trackingCoordinator.motionFusion.requestPermission().catch(() => {});
       }
 
       // Audio toggle

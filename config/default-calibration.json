@@ -24,6 +24,9 @@
   "filterMinCF": 0.001,
   "filterBeta": 80.0,
   "enableDeviceMotion": true,
+  "enableMotionFusion": true,
+  "maxPoseCorrection": 0.8,
+  "maxAngleCorrection": 1.05,
   "showDebugHUD": false,
   "showVisualBounds": false,
   "autoPlayAudio": false

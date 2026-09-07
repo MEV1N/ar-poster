@@ -53,7 +53,10 @@ export class ARManager {
       lostTargetTimeout: this.calibration.lostTargetTimeout || 1200,
       recoveryBlendDuration: this.calibration.recoveryBlendDuration || 250,
       filterBeta: this.calibration.filterBeta || 80.0,
-      enableDeviceMotion: this.calibration.enableDeviceMotion !== false
+      enableDeviceMotion: this.calibration.enableDeviceMotion !== false,
+      enableMotionFusion: this.calibration.enableMotionFusion !== false,
+      maxPoseCorrection: this.calibration.maxPoseCorrection || 0.8,
+      maxAngleCorrection: this.calibration.maxAngleCorrection || 1.05
     });
 
     // Compatibility references
@@ -190,6 +193,12 @@ export class ARManager {
 
   async start() {
     if (this.isRunning) return;
+
+    // Request motion sensor permission (iOS 13+ / Web gesture)
+    if (this.trackingCoordinator?.motionFusion) {
+      this.trackingCoordinator.motionFusion.requestPermission().catch(() => {});
+    }
+
     await this.mindarThree.start();
     this.isRunning = true;
 
@@ -234,31 +243,35 @@ export class ARManager {
           group.matrix.elements[10] !== 0
         );
 
-        let activeMatrix = null;
-
         if (isVisuallyTracked) {
           item.lastValidMatrix.copy(group.matrix);
           item.lastSeenTime = nowMs;
-          activeMatrix = group.matrix;
-        } else {
-          const missedMs = item.lastSeenTime ? (nowMs - item.lastSeenTime) : Infinity;
-          const lostTimeout = this.calibration.lostTargetTimeout || 1200;
-
-          // OCCLUSION RESISTANCE: Keep anchor.group visible and hold last known matrix
-          if (item.contentAnchor.isTracking && missedMs <= lostTimeout) {
-            group.visible = true;
-            group.matrix.copy(item.lastValidMatrix);
-            activeMatrix = item.lastValidMatrix;
-          }
         }
 
-        // Process telemetry through TrackingCoordinator
+        // Process frame with pose fusion through TrackingCoordinator
         const telemetry = {
           isTracking: isVisuallyTracked,
           inliers: isVisuallyTracked ? 24 : 0
         };
 
-        const result = this.trackingCoordinator.processFrame(i, activeMatrix, telemetry, delta, nowMs);
+        const result = this.trackingCoordinator.processFrame(
+          i,
+          isVisuallyTracked ? group.matrix : null,
+          telemetry,
+          delta,
+          nowMs
+        );
+
+        if (isVisuallyTracked) {
+          // Apply fused matrix (includes smooth reacquisition blend)
+          group.matrix.copy(result.fusedMatrix);
+          group.matrixWorldNeedsUpdate = true;
+        } else if (result.isHoldingPose && item.contentAnchor.isTracking) {
+          // OCCLUSION RESISTANCE: Keep anchor.group visible and apply motion-fused predicted matrix
+          group.visible = true;
+          group.matrix.copy(result.fusedMatrix);
+          group.matrixWorldNeedsUpdate = true;
+        }
 
         // Update content anchor (handles video and animations)
         item.contentAnchor.update(time, delta);
@@ -313,7 +326,10 @@ export class ARManager {
       lostTargetTimeout: this.calibration.lostTargetTimeout,
       recoveryBlendDuration: this.calibration.recoveryBlendDuration,
       filterBeta: this.calibration.filterBeta,
-      enableDeviceMotion: this.calibration.enableDeviceMotion !== false
+      enableDeviceMotion: this.calibration.enableDeviceMotion !== false,
+      enableMotionFusion: this.calibration.enableMotionFusion !== false,
+      maxPoseCorrection: this.calibration.maxPoseCorrection || 0.8,
+      maxAngleCorrection: this.calibration.maxAngleCorrection || 1.05
     });
   }
 

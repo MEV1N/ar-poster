@@ -1,10 +1,32 @@
 import * as THREE from 'three';
+import { MotionFusion } from './motion-fusion.js';
+
+// Pre-allocated scratch objects for zero-allocation math in 60 FPS animation loop
+const _scratchPos = new THREE.Vector3();
+const _scratchQuat = new THREE.Quaternion();
+const _scratchScale = new THREE.Vector3();
+
+const _scratchRefPos = new THREE.Vector3();
+const _scratchRefQuat = new THREE.Quaternion();
+const _scratchRefScale = new THREE.Vector3();
+
+const _scratchDeltaR = new THREE.Quaternion();
+const _scratchPredPos = new THREE.Vector3();
+const _scratchPredQuat = new THREE.Quaternion();
+
+const _scratchBlendPos = new THREE.Vector3();
+const _scratchBlendQuat = new THREE.Quaternion();
+const _scratchBlendScale = new THREE.Vector3();
+
+const _scratchRawPos = new THREE.Vector3();
+const _scratchRawQuat = new THREE.Quaternion();
+const _scratchRawScale = new THREE.Vector3();
 
 /**
  * TrackingCoordinator
- * Manages 5-tier tracking state machine (LOCKED, GOOD, DEGRADED, PREDICTING, LOST),
- * multi-factor confidence scoring (0-100), short-term velocity damping,
- * and telemetry analytics for the Developer Debug HUD.
+ * Coordinates 5-tier tracking state machine (LOCKED, GOOD, DEGRADED, PREDICTING, LOST),
+ * visual + device-motion pose fusion, short-term velocity damping,
+ * reacquisition jump rejection with smooth blending, and developer telemetry.
  */
 export class TrackingCoordinator {
   constructor(options = {}) {
@@ -17,51 +39,17 @@ export class TrackingCoordinator {
       recoveryBlendDuration: options.recoveryBlendDuration ?? 250, // ms
       filterBeta: options.filterBeta ?? 80.0,
       enableDeviceMotion: options.enableDeviceMotion !== false,
+      enableMotionFusion: options.enableMotionFusion !== false,
+      maxPoseCorrection: options.maxPoseCorrection ?? 0.8, // meters
+      maxAngleCorrection: options.maxAngleCorrection ?? 1.05, // ~60 degrees in radians
       ...options
     };
 
+    // Shared motion sensor fusion instance
+    this.motionFusion = new MotionFusion();
+
     // Per-target state map: targetIndex -> state object
     this.targets = new Map();
-
-    // Device gyro tracking for motion assistance
-    this.deviceGyro = {
-      available: false,
-      currentEuler: new THREE.Euler(0, 0, 0, 'YXZ'),
-      currentQuat: new THREE.Quaternion(),
-      lastQuat: new THREE.Quaternion(),
-      deltaQuat: new THREE.Quaternion(),
-      hasSample: false
-    };
-
-    this.initDeviceOrientation();
-  }
-
-  initDeviceOrientation() {
-    if (typeof window === 'undefined' || !window.addEventListener) return;
-
-    const handleOrientation = (e) => {
-      if (e.alpha === null || e.beta === null || e.gamma === null) return;
-      this.deviceGyro.available = true;
-
-      const degToRad = Math.PI / 180;
-      const alpha = (e.alpha || 0) * degToRad;
-      const beta = (e.beta || 0) * degToRad;
-      const gamma = (e.gamma || 0) * degToRad;
-
-      this.deviceGyro.currentEuler.set(beta, gamma, alpha, 'YXZ');
-      this.deviceGyro.currentQuat.setFromEuler(this.deviceGyro.currentEuler);
-
-      if (this.deviceGyro.hasSample) {
-        this.deviceGyro.deltaQuat.copy(this.deviceGyro.lastQuat).invert().multiply(this.deviceGyro.currentQuat);
-      } else {
-        this.deviceGyro.hasSample = true;
-        this.deviceGyro.deltaQuat.identity();
-      }
-      this.deviceGyro.lastQuat.copy(this.deviceGyro.currentQuat);
-    };
-
-    window.addEventListener('deviceorientation', handleOrientation, { passive: true });
-    this._orientationHandler = handleOrientation;
   }
 
   getOrCreateTargetState(targetIndex) {
@@ -71,12 +59,26 @@ export class TrackingCoordinator {
         confidence: 0,
         historicalConfidence: 0,
 
+        // Absolute visual reference pose at time of last visual lock
+        refVisualMatrix: new THREE.Matrix4(),
+        refSensorQuat: new THREE.Quaternion(),
+        hasValidRef: false,
+
+        // Fused / output matrix for this target
+        fusedMatrix: new THREE.Matrix4(),
+
         // Kinematics for prediction
         lastPos: new THREE.Vector3(),
         lastQuat: new THREE.Quaternion(),
         lastScale: new THREE.Vector3(1, 1, 1),
         linearVelocity: new THREE.Vector3(),
         lastVelocitySampleTime: 0,
+
+        // Reacquisition smoothing & jump rejection
+        isBlendingReacquisition: false,
+        reacquisitionBlendStartTime: 0,
+        reacquisitionStartMatrix: new THREE.Matrix4(),
+        reacquisitionTargetMatrix: new THREE.Matrix4(),
 
         // Timing
         lastSeenTime: 0,
@@ -94,6 +96,8 @@ export class TrackingCoordinator {
           poseDelta: 0,
           missedMs: 0,
           predicted: false,
+          motionActive: false,
+          confidence: 0,
           state: 'LOST'
         }
       });
@@ -114,19 +118,23 @@ export class TrackingCoordinator {
   }
 
   /**
-   * Process a tracking frame for a specific target.
+   * Process a tracking frame for a specific target with Visual + Device-Motion Pose Fusion.
    *
    * @param {number} targetIndex - Target index
    * @param {THREE.Matrix4|null} rawMatrix - Matrix from MindAR when tracked
    * @param {Object} telemetry - Inliers, visual tracking flag
    * @param {number} dt - Frame delta time in seconds
    * @param {number} nowMs - Current timestamp in milliseconds
+   * @returns {Object} Tracking frame outcome
    */
   processFrame(targetIndex, rawMatrix, telemetry = {}, dt = 0.016, nowMs = performance.now()) {
     const t = this.getOrCreateTargetState(targetIndex);
     dt = Math.max(0.001, Math.min(dt, 0.1));
 
     const isVisuallyTracked = telemetry.isTracking === true && rawMatrix !== null;
+
+    let posDelta = 0;
+    let angleDelta = 0;
 
     if (isVisuallyTracked) {
       // --- VISUALLY TRACKED ---
@@ -135,28 +143,67 @@ export class TrackingCoordinator {
       t.lastSeenTime = nowMs;
       t.missStartTime = 0;
 
-      // Extract raw position & quaternion for velocity & delta
-      const rawPos = new THREE.Vector3();
-      const rawQuat = new THREE.Quaternion();
-      const rawScale = new THREE.Vector3();
-      rawMatrix.decompose(rawPos, rawQuat, rawScale);
+      rawMatrix.decompose(_scratchRawPos, _scratchRawQuat, _scratchRawScale);
 
-      let posDelta = 0;
-      let angleDelta = 0;
+      // Check if reacquiring from prediction / occlusion
+      const wasPredictingOrDegraded = (t.state === 'PREDICTING' || t.state === 'DEGRADED') && t.hasValidRef;
 
-      if (t.lastVelocitySampleTime > 0) {
-        posDelta = t.lastPos.distanceTo(rawPos);
-        angleDelta = 2 * Math.acos(Math.min(1, Math.max(-1, Math.abs(t.lastQuat.dot(rawQuat)))));
+      if (wasPredictingOrDegraded) {
+        _scratchPos.setFromMatrixPosition(t.fusedMatrix);
+        const posJump = _scratchPos.distanceTo(_scratchRawPos);
 
-        const velDt = Math.max(0.001, (nowMs - t.lastVelocitySampleTime) / 1000);
-        const instantVel = new THREE.Vector3().subVectors(rawPos, t.lastPos).divideScalar(velDt);
-        t.linearVelocity.lerp(instantVel, 0.3); // Smooth velocity vector
+        _scratchQuat.setFromRotationMatrix(t.fusedMatrix);
+        const angleJump = 2 * Math.acos(Math.min(1, Math.max(-1, Math.abs(_scratchQuat.dot(_scratchRawQuat)))));
+
+        // Begin smooth anti-snap blending
+        t.isBlendingReacquisition = true;
+        t.reacquisitionBlendStartTime = nowMs;
+        t.reacquisitionStartMatrix.copy(t.fusedMatrix);
+        t.reacquisitionTargetMatrix.copy(rawMatrix);
       }
 
-      t.lastPos.copy(rawPos);
-      t.lastQuat.copy(rawQuat);
-      t.lastScale.copy(rawScale);
+      if (t.isBlendingReacquisition) {
+        const blendElapsed = nowMs - t.reacquisitionBlendStartTime;
+        const progress = Math.min(1.0, blendElapsed / this.options.recoveryBlendDuration);
+        // Smoothstep interpolation s(t) = 3t^2 - 2t^3
+        const s = progress * progress * (3 - 2 * progress);
+
+        t.reacquisitionStartMatrix.decompose(_scratchBlendPos, _scratchBlendQuat, _scratchBlendScale);
+        _scratchBlendPos.lerp(_scratchRawPos, s);
+        _scratchBlendQuat.slerp(_scratchRawQuat, s);
+        _scratchBlendScale.lerp(_scratchRawScale, s);
+        t.fusedMatrix.compose(_scratchBlendPos, _scratchBlendQuat, _scratchBlendScale);
+
+        if (progress >= 1.0) {
+          t.isBlendingReacquisition = false;
+        }
+      } else {
+        // Direct visual tracking
+        t.fusedMatrix.copy(rawMatrix);
+      }
+
+      // Kinematics & delta tracking
+      if (t.lastVelocitySampleTime > 0) {
+        posDelta = t.lastPos.distanceTo(_scratchRawPos);
+        angleDelta = 2 * Math.acos(Math.min(1, Math.max(-1, Math.abs(t.lastQuat.dot(_scratchRawQuat)))));
+
+        const velDt = Math.max(0.001, (nowMs - t.lastVelocitySampleTime) / 1000);
+        const instantVel = _scratchPos.subVectors(_scratchRawPos, t.lastPos).divideScalar(velDt);
+        // Reject wild spikes (> 3 m/s)
+        if (instantVel.length() < 3.0) {
+          t.linearVelocity.lerp(instantVel, 0.25);
+        }
+      }
+
+      t.lastPos.copy(_scratchRawPos);
+      t.lastQuat.copy(_scratchRawQuat);
+      t.lastScale.copy(_scratchRawScale);
       t.lastVelocitySampleTime = nowMs;
+
+      // Update absolute reference visual matrix and sensor snapshot
+      t.refVisualMatrix.copy(rawMatrix);
+      this.motionFusion.getSnapshot(t.refSensorQuat);
+      t.hasValidRef = true;
 
       // Multi-factor confidence scoring
       const inlierCount = telemetry.inliers || 24;
@@ -171,7 +218,7 @@ export class TrackingCoordinator {
       t.confidence = confidence;
       t.historicalConfidence = 0.8 * t.historicalConfidence + 0.2 * confidence;
 
-      // Determine 5-tier state
+      // 5-tier state
       if (confidence >= 80 && t.consecutiveHits >= 3) {
         t.state = 'LOCKED';
       } else if (confidence >= this.options.confidenceThreshold || t.consecutiveHits >= 1) {
@@ -189,6 +236,7 @@ export class TrackingCoordinator {
         poseDelta: Number(posDelta.toFixed(3)),
         missedMs: 0,
         predicted: false,
+        motionActive: this.motionFusion.isActive,
         confidence: Math.round(confidence),
         state: t.state
       };
@@ -197,18 +245,44 @@ export class TrackingCoordinator {
       // --- MISSED FRAME / OCCLUSION HANDLING ---
       t.consecutiveMisses++;
       t.consecutiveHits = 0;
+      t.isBlendingReacquisition = false;
 
       if (t.missStartTime === 0) {
         t.missStartTime = nowMs;
       }
       const missedMs = nowMs - t.missStartTime;
 
-      if (missedMs <= this.options.predictionDuration && t.lastSeenTime > 0) {
-        // PREDICTING STATE: Extrapolate short-term pose with damped velocity
+      if (missedMs <= this.options.predictionDuration && t.hasValidRef) {
+        // PREDICTING STATE: IMU Orientation Delta + Damped Linear Velocity
         t.state = 'PREDICTING';
 
         const normTime = Math.min(1.0, missedMs / this.options.predictionDuration);
         const damping = Math.pow(Math.max(0, 1.0 - normTime), 1.5);
+
+        const canUseMotion = this.options.enableMotionFusion && this.motionFusion.isActive && this.motionFusion.sampleCount > 2;
+
+        t.refVisualMatrix.decompose(_scratchRefPos, _scratchRefQuat, _scratchRefScale);
+
+        if (canUseMotion) {
+          // DeltaR is the inverse camera rotation in camera space
+          this.motionFusion.getRelativeCameraDelta(t.refSensorQuat, _scratchDeltaR);
+
+          // Rotate reference position by inverse camera delta
+          _scratchPredPos.copy(_scratchRefPos).applyQuaternion(_scratchDeltaR);
+          // Add damped velocity
+          const missDtSec = missedMs / 1000;
+          _scratchPredPos.addScaledVector(t.linearVelocity, missDtSec * damping);
+
+          // Rotate reference orientation by inverse camera delta
+          _scratchPredQuat.multiplyQuaternions(_scratchDeltaR, _scratchRefQuat);
+
+          t.fusedMatrix.compose(_scratchPredPos, _scratchPredQuat, _scratchRefScale);
+        } else {
+          // Fallback: hold reference orientation and apply damped velocity
+          const missDtSec = missedMs / 1000;
+          _scratchPredPos.copy(_scratchRefPos).addScaledVector(t.linearVelocity, missDtSec * damping);
+          t.fusedMatrix.compose(_scratchPredPos, _scratchRefQuat, _scratchRefScale);
+        }
 
         // Gradually decay confidence during prediction
         t.confidence = Math.max(30, Math.round(t.confidence * (1 - 0.03 * (missedMs / 100))));
@@ -222,12 +296,13 @@ export class TrackingCoordinator {
           poseDelta: 0,
           missedMs: Math.round(missedMs),
           predicted: true,
+          motionActive: this.motionFusion.isActive,
           confidence: Math.round(t.confidence),
           state: 'PREDICTING'
         };
 
-      } else if (missedMs <= this.options.lostTargetTimeout && t.lastSeenTime > 0) {
-        // DEGRADED STATE: Holding pose while waiting for timeout
+      } else if (missedMs <= this.options.lostTargetTimeout && t.hasValidRef) {
+        // DEGRADED STATE: Holding last predicted pose while waiting for timeout
         t.state = 'DEGRADED';
         t.confidence = Math.max(15, Math.round(t.confidence * 0.85));
 
@@ -240,6 +315,7 @@ export class TrackingCoordinator {
           poseDelta: 0,
           missedMs: Math.round(missedMs),
           predicted: true,
+          motionActive: this.motionFusion.isActive,
           confidence: Math.round(t.confidence),
           state: 'DEGRADED'
         };
@@ -249,6 +325,7 @@ export class TrackingCoordinator {
         t.state = 'LOST';
         t.confidence = 0;
         t.historicalConfidence = 0;
+        t.hasValidRef = false;
         t.linearVelocity.set(0, 0, 0);
 
         t.stats = {
@@ -260,6 +337,7 @@ export class TrackingCoordinator {
           poseDelta: 0,
           missedMs: Math.round(missedMs),
           predicted: false,
+          motionActive: this.motionFusion.isActive,
           confidence: 0,
           state: 'LOST'
         };
@@ -270,7 +348,8 @@ export class TrackingCoordinator {
       state: t.state,
       confidence: Math.round(t.confidence),
       stats: t.stats,
-      isHoldingPose: t.state === 'PREDICTING' || t.state === 'DEGRADED'
+      isHoldingPose: t.state === 'PREDICTING' || t.state === 'DEGRADED',
+      fusedMatrix: t.fusedMatrix
     };
   }
 
@@ -307,9 +386,7 @@ export class TrackingCoordinator {
   }
 
   destroy() {
-    if (typeof window !== 'undefined' && this._orientationHandler) {
-      window.removeEventListener('deviceorientation', this._orientationHandler);
-    }
+    this.motionFusion.destroy();
     this.targets.clear();
   }
 }
