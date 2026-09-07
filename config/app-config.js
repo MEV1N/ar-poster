@@ -84,7 +84,9 @@ export function getSavedCalibration() {
         ...APP_CONFIG.defaultCalibration,
         ...parsed,
         position: { ...APP_CONFIG.defaultCalibration.position, ...(parsed.position || {}) },
-        rotation: { ...APP_CONFIG.defaultCalibration.rotation, ...(parsed.rotation || {}) }
+        rotation: { ...APP_CONFIG.defaultCalibration.rotation, ...(parsed.rotation || {}) },
+        showVisualBounds: false,
+        showDebugHUD: false
       };
     }
   } catch (err) {

@@ -382,20 +382,17 @@ This app supports tracking multiple posters with different videos from a single 
 | File Path | Role & Detailed Responsibility |
 | :--- | :--- |
 | [`index.html`](file:///c:/Users/mevin_z1mcnwj/Desktop/ar%20poster/index.html) | Sole public entry point. Minimal DOM containing `#arContainer`, loading states, and camera root. |
-| [`main.js`](file:///c:/Users/mevin_z1mcnwj/Desktop/ar%20poster/main.js) | Application controller. Coordinates UI overlays, Debug HUD, camera start triggers, audio gestures, and triple-tap admin calibration. |
+| [`main.js`](file:///c:/Users/mevin_z1mcnwj/Desktop/ar%20poster/main.js) | Application controller. Manages clean mobile camera launch, audio toggle gestures, and guidance prompts. |
 | [`config/app-config.js`](file:///c:/Users/mevin_z1mcnwj/Desktop/ar%20poster/config/app-config.js) | Declarative registry of all poster targets, aspect ratios, video source fallbacks, and default calibration values. |
+| [`config/default-calibration.json`](file:///c:/Users/mevin_z1mcnwj/Desktop/ar%20poster/config/default-calibration.json) | Central repository for all tracking parameters, occlusion timeouts, and 3D offset values. |
 | [`ar/ar-manager.js`](file:///c:/Users/mevin_z1mcnwj/Desktop/ar%20poster/ar/ar-manager.js) | Core WebAR manager. Boots `MindARThree`, manages Three.js scene, lighting, camera, multi-target anchors, render loop, and resize handlers. |
 | [`ar/tracking-coordinator.js`](file:///c:/Users/mevin_z1mcnwj/Desktop/ar%20poster/ar/tracking-coordinator.js) | 5-tier state machine, multi-factor confidence scoring (0–100), adaptive OneEuro filter, damped velocity predictor, and anti-snap recovery blender. |
-| [`ar/content-anchor.js`](file:///c:/Users/mevin_z1mcnwj/Desktop/ar%20poster/ar/content-anchor.js) | Container attached directly to the Three.js scene. Handles 6-DoF pose setting, smooth fade-out on confirmed lost, and uninterrupted video playback. |
+| [`ar/content-anchor.js`](file:///c:/Users/mevin_z1mcnwj/Desktop/ar%20poster/ar/content-anchor.js) | Container attached to MindAR's anchor. Handles 3D transform calibration, occlusion hold, smooth fade-out, and continuous video playback. |
 | [`ar/video-plane.js`](file:///c:/Users/mevin_z1mcnwj/Desktop/ar%20poster/ar/video-plane.js) | Creates HTML5 video element, maps it to `THREE.VideoTexture`, calculates aspect-ratio geometry, and provides fallback cyberpunk procedural canvas visualizer. |
-| [`components/debug-hud.js`](file:///c:/Users/mevin_z1mcnwj/Desktop/ar%20poster/components/debug-hud.js) | Developer Debug HUD showing Target, 5-tier State, Confidence bar, Inliers, Quadrant coverage, Pose delta, Prediction status, and FPS. |
+| [`components/debug-hud.js`](file:///c:/Users/mevin_z1mcnwj/Desktop/ar%20poster/components/debug-hud.js) | Developer Debug HUD (dynamically loaded via `?debug=true`) showing Target, 5-tier State, Confidence bar, Inliers, and FPS. |
 | [`animations/holo-border.js`](file:///c:/Users/mevin_z1mcnwj/Desktop/ar%20poster/animations/holo-border.js) | 3D holographic border overlay. Generates pulsing corner reticles, glowing perimeter frame, and oscillating vertical laser scanline. |
 | [`animations/particle-system.js`](file:///c:/Users/mevin_z1mcnwj/Desktop/ar%20poster/animations/particle-system.js) | 3D particle vortex. Generates 100+ ambient floating particles with independent velocity vectors and color gradients in front of the poster. |
-| [`ar/bounds-visualizer.js`](file:///c:/Users/mevin_z1mcnwj/Desktop/ar%20poster/ar/bounds-visualizer.js) | 3D alignment visualizer. Renders detected poster perimeter, yellow content bounding box, and 3D coordinate axes for calibration. |
-| [`calibration/calibration-manager.js`](file:///c:/Users/mevin_z1mcnwj/Desktop/ar%20poster/calibration/calibration-manager.js) | State persistence for calibration parameters. Saves to `localStorage`, exports/imports JSON configurations. |
-| [`calibration/calibration-panel.js`](file:///c:/Users/mevin_z1mcnwj/Desktop/ar%20poster/calibration/calibration-panel.js) | Slide-out admin UI panel with real-time sliders for Position, Rotation, Scale, Prediction Duration, Recovery Blend, and Filters. |
 | [`tools/compile-targets.mjs`](file:///c:/Users/mevin_z1mcnwj/Desktop/ar%20poster/tools/compile-targets.mjs) | Headless CLI compiler script. Spawns Edge/Chrome with Chrome DevTools Protocol (CDP) to compile posters into `targets.mind` automatically. |
-| [`tools/compiler.html`](file:///c:/Users/mevin_z1mcnwj/Desktop/ar%20poster/tools/compiler.html) | Interactive browser-based Compiler Studio with drag-and-drop keypoint inspector, quadrant crosshairs, rating meter, and `.mind` exporter. |
 | [`vite.config.js`](file:///c:/Users/mevin_z1mcnwj/Desktop/ar%20poster/vite.config.js) | Development server configuration, asset loaders, access-control guards, and the `/__save_mind` target persistence endpoint. |
 
 ---
@@ -447,36 +444,23 @@ Optical feature tracking relies on the physical characteristics of the printed a
 
 ---
 
-## 11. Troubleshooting, Developer Debug HUD & Calibration Studio
+## 11. Configuration & Developer Telemetry
 
-### Developer Debug HUD
-To inspect real-time tracking metrics while testing posters:
-- **Activate via URL:** Open `http://localhost:5173/?debug=true` or append `#debug`.
-- **Activate via Studio:** Open Calibration Studio and toggle **Show Developer Debug HUD**.
-- **Metrics Displayed:**
-  - **Active Target:** Current recognized poster.
-  - **Tracking State:** Color-coded 5-tier state badge (`LOCKED`, `GOOD`, `DEGRADED`, `PREDICTING`, `LOST`).
-  - **Tracking Confidence:** Live 0–100% score bar.
-  - **Visual Inliers:** Active RANSAC inlier count.
-  - **Quadrant Spread:** Quadrant distribution (e.g. `4/4 quadrants`).
-  - **Pose Delta:** Real-time distance variation between camera and poster.
-  - **Prediction Status:** Real-time indicator showing if damping velocity extrapolation is active during occlusion.
-  - **Performance:** Live WebGL rendering FPS counter.
+### Code-Based Configuration (Production Standard)
+All poster targets, calibration offsets, timeouts, and filter parameters are strictly configured and version-controlled in the codebase:
+- **Poster & Video Registry:** Configured in [`config/app-config.js`](file:///c:/Users/mevin_z1mcnwj/Desktop/ar%20poster/config/app-config.js) under the `TARGETS` array.
+- **Tracking & Filter Parameters:** Configured in [`config/default-calibration.json`](file:///c:/Users/mevin_z1mcnwj/Desktop/ar%20poster/config/default-calibration.json).
+  - `lostTargetTimeout`: Debounce time before content fades out when completely obstructed (default `1200ms`).
+  - `predictionDuration`: Short-term velocity extrapolation duration during brief occlusion (default `800ms`).
+  - `recoveryBlendDuration`: Anti-snap blend time when reacquiring tracking (default `250ms`).
+  - `confidenceThreshold`: Cutoff for solid tracking confidence (default `0.55`).
+  - `filterBeta`: Responsiveness coefficient during rapid motion (default `80.0`).
+  - `enableDeviceMotion`: Device gyro orientation integration assist (default `true`).
 
-### Live Calibration Studio
-If the video appears slightly misaligned with your physical print (e.g. print margins or bleed differences), use the built-in Calibration Studio:
-- **Access:** Triple-tap the screen, click the subtle gear icon in the top right, or visit `http://localhost:5173/?admin=true`.
-- **Controls:**
-  - **Position (X, Y, Z):** Fine-tune alignment and depth.
-  - **Scale & Aspect (Uniform, Width Ratio, Height Ratio):** Adjust sizing to match physical paper exactly.
-  - **Rotation (Roll, Pitch, Yaw):** Compensate for physical poster mounting angle.
-  - **Prediction Duration:** Control how long content stays anchored during brief occlusion (default $800\text{ ms}$).
-  - **Lost Target Debounce:** Time before content fades out when completely obstructed (default $1200\text{ ms}$).
-  - **Recovery Blend:** Anti-snap slerp/lerp transition time on reacquisition (default $250\text{ ms}$).
-  - **Adaptive Filter Beta:** Responsiveness vs. smoothing during rapid device motion.
-  - **Device Motion Assist:** Toggle phone gyro integration for occlusion prediction.
-  - **Visual 3D Bounding Box:** Toggles the cyan/yellow wireframe overlay and 3D coordinate axes.
-- **Save & Export:** Click **Save Calibration** to store settings in `localStorage`, or **Export JSON** to commit changes to `config/default-calibration.json`.
+### Developer Debug Telemetry (Optional)
+The public experience is completely clean with zero admin controls or telemetry visible to users. For developers wanting to inspect real-time optical tracking metrics:
+- **Activate via URL:** Open `http://localhost:5173/?debug=true`.
+- **Metrics Inspected:** Active Target, 5-Tier State (`LOCKED`, `GOOD`, `DEGRADED`, `PREDICTING`, `LOST`), 0–100% confidence gauge, active RANSAC inliers, quadrant coverage, pose delta, prediction status, and live FPS.
 
 ### Common Issues & Solutions
 1. **Camera permission denied / black screen:**
@@ -484,5 +468,5 @@ If the video appears slightly misaligned with your physical print (e.g. print ma
 2. **Video plays without sound:**
    - Mobile browser policy starts videos muted. Tap anywhere on the screen once the poster is tracked to unmute audio.
 3. **Tracking feels jittery:**
-   - Click **Optimize for Universal Tracking** in the Calibration Studio to apply the tuned OneEuro parameters, or ensure the poster is evenly lit and free from reflective glare.
+   - Ensure the poster is evenly lit and free from reflective glare, or adjust `filterBeta` in [`config/default-calibration.json`](file:///c:/Users/mevin_z1mcnwj/Desktop/ar%20poster/config/default-calibration.json).
 

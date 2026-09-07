@@ -95,40 +95,6 @@ html, body {
   pointer-events: none;
 }
 
-/* Subtle Admin Gear Button */
-.admin-gear-btn {
-  position: fixed;
-  top: calc(env(safe-area-inset-top, 16px) + 12px);
-  right: 16px;
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  background: rgba(12, 16, 26, 0.55);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  color: rgba(255, 255, 255, 0.75);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  z-index: 50;
-  transition: all 0.25s ease;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-}
-
-.admin-gear-btn:hover, .admin-gear-btn:active {
-  background: rgba(0, 240, 255, 0.2);
-  color: #00f0ff;
-  border-color: #00f0ff;
-  transform: rotate(30deg);
-}
-
-.admin-gear-btn svg {
-  width: 18px;
-  height: 18px;
-  fill: currentColor;
-}
 
 /* Tap to start camera overlay for mobile gesture requirement */
 .start-overlay {
